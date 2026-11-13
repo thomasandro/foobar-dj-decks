@@ -5,6 +5,13 @@
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
 **0.12.0-alpha.1 est une préversion alpha expérimentale.**
 
+## ⬇ Télécharger l’extension
+
+**[Télécharger DJ Decks 0.12.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.12.0-alpha.1/foo_dj-0.12.0-alpha.1-win-x64.fb2k-component)**
+
+Fichier installable `.fb2k-component` pour foobar2000 2.x x64.
+Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
+
 [Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.12.0-alpha.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
