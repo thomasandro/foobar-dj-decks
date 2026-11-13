@@ -1,6 +1,6 @@
 # DJ Decks for foobar2000 (`foo_dj`)
 
-[Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md)
+[Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
 **0.12.0-alpha.1 is an experimental alpha release.**
