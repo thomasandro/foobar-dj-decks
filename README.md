@@ -5,6 +5,13 @@
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
 **0.12.0-alpha.1 is an experimental alpha release.**
 
+## ⬇ Download the component
+
+**[Download DJ Decks 0.12.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.12.0-alpha.1/foo_dj-0.12.0-alpha.1-win-x64.fb2k-component)**
+
+Installable `.fb2k-component` package for foobar2000 2.x x64.
+In foobar2000: **Preferences → Components → Install…**, then restart.
+
 [Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.12.0-alpha.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
