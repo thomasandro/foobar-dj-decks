@@ -30,6 +30,13 @@
   storage, artwork providers or decoder calls can delay the UI and shutdown.
 - Waveforms are rebuilt for each load and held in memory; very long files are costly.
 
+## New controls and metadata
+
+- External BPM/key command invocation and completion still need live-host tests.
+- Custom analyser tag names must match the supported fields.
+- Harmonic compatibility uses tags, not audio measurements; extreme tempo and pitch settings can introduce artifacts.
+- New controls need live layout validation in narrow panels and at different DPI scales.
+
 ## Integration
 
 - Default UI element only; no native Columns UI panel, no headphone/cue routing.

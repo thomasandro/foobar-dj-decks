@@ -1,19 +1,25 @@
-# DJ Decks 0.12.0-alpha.1 — experimental prerelease
+# DJ Decks 0.15.0-alpha.1 — experimental prerelease
 
-First public alpha of a two-deck DJ component for foobar2000 Windows x64 / Default UI.
-Includes independent transport, waveforms/artwork, a mixer, ±16% tempo/rate,
-SoundTouch key lock, tagged-BPM matching, experimental beat SYNC, manual grids,
-session restoration and a French/English interface.
+Second public alpha for foobar2000 Windows x64 / Default UI.
 
-Installable: `foo_dj-0.12.0-alpha.1-win-x64.fb2k-component`.
-Matching complete source: `foo_dj-0.12.0-alpha.1-source.zip`.
-Checksums: `SHA256SUMS.txt`. Distribute source alongside the binary package.
+New since 0.12.0-alpha.1:
+- Camelot and standard key labels, e.g. **8A (Am)**, reading foobar database/file tags.
+- Colored harmonic compatibility hints: green/OK, amber/~, grey/? when uncertain.
+- Independent **−12 to +12 semitone transposition**, without changing tempo.
+- Per-deck **Calculate BPM**, **Calculate key**, **Refresh tags**; the analysis buttons
+  require optional **foo_bpm** and **foo_musical_key**, respectively. Their dialogs,
+  validation and tag-writing preferences still apply; live invocation needs testing.
+- Per-deck **±8%, ±16%, ±50% speed ranges**, respected by BPM matching and beat SYNC.
+- Persisted transposition/range and improved key-badge contrast.
 
-Experimental and unsigned. Automatic beat detection is conservative and may reject
-music. Grids can be manually anchored; dotted grids are indicative only. There is
-no limiter/headphone cue routing. Slow shutdown has been observed and needs investigation.
+Install `foo_dj-0.15.0-alpha.1-win-x64.fb2k-component` via Preferences → Components → Install.
+The matching `foo_dj-0.15.0-alpha.1-source.zip` includes the complete source and bundled
+dependencies. SHA-256 hashes are provided in `SHA256SUMS.txt`.
 
-The standalone build and native tests passed, but a clean portable-profile install/load
-has not yet been validated. Do not mark this as a stable release. Clean-profile installation and extended runtime checks remain pending; see
-[known issues](https://github.com/thomasandro/foobar-dj-decks/blob/main/docs/KNOWN_ISSUES.md) and
-[validation](https://github.com/thomasandro/foobar-dj-decks/blob/main/docs/VALIDATION.md).
+[Detailed changelog, including unpublished development versions](https://github.com/thomasandro/foobar-dj-decks/blob/main/CHANGELOG.md)
+
+**Experimental, unsigned, not a stability release.** Build and native tests passed,
+including 30 synthetic audio duration/frequency cases. Clean-profile install/load,
+real-music listening tests, external analysis commands and extended runtime/shutdown
+checks remain pending. Slow shutdown has been observed. No limiter or headphone cue;
+automatic beat SYNC remains experimental. See [known issues](https://github.com/thomasandro/foobar-dj-decks/blob/main/docs/KNOWN_ISSUES.md).

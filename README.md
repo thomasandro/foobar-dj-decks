@@ -3,16 +3,16 @@
 [Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
-**0.12.0-alpha.1 is an experimental alpha release.**
+**0.15.0-alpha.1 is an experimental alpha release.**
 
 ## ⬇ Download the component
 
-**[Download DJ Decks 0.12.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.12.0-alpha.1/foo_dj-0.12.0-alpha.1-win-x64.fb2k-component)**
+**[Download DJ Decks 0.15.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.15.0-alpha.1/foo_dj-0.15.0-alpha.1-win-x64.fb2k-component)**
 
 Installable `.fb2k-component` package for foobar2000 2.x x64.
 In foobar2000: **Preferences → Components → Install…**, then restart.
 
-[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.12.0-alpha.1)
+[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.15.0-alpha.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
 
@@ -22,8 +22,12 @@ are particularly welcome.
 - Per-deck volume and constant-power crossfader with smoothed gain changes.
 - Waveforms with zoom, elapsed/remaining-region shading and clickable seek.
 - Front covers, artist/title on separate scrolling lines, French/English interface.
-- Tagged BPM display; speed from −16% to +16%, vinyl or SoundTouch key-lock mode.
-- One-click tagged-BPM matching, and experimental beat-phase SYNC.
+- Tagged BPM display; selectable ±8%, ±16% or ±50% speed range, vinyl or SoundTouch key-lock mode.
+- One-click tagged-BPM matching and experimental beat-phase SYNC within the selected range.
+- Independent pitch transposition from −12 to +12 semitones, without changing tempo.
+- Camelot + standard musical key labels, e.g. 8A (Am), and colored compatibility badges.
+- Per-deck BPM/key analysis through optional foo_bpm / foo_musical_key components;
+  metadata refresh without reloading audio. [Analysis details](docs/DECK_ANALYSIS.md).
 - Solid estimated/manual beat markers; dotted indicative BPM grids when detection is uncertain.
 - Manual grid shift, “Beat here”, Auto reset; grids remembered per file and subsong.
 - Loaded tracks and positions restored paused after a normal close.
@@ -36,7 +40,7 @@ foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions ha
 not been validated. There is no x86, ARM64, macOS or native Columns UI build.
 
 Prefer an isolated portable profile for the first test. Install
-`foo_dj-0.12.0-alpha.1-win-x64.fb2k-component` with
+`foo_dj-0.15.0-alpha.1-win-x64.fb2k-component` with
 **Preferences → Components → Install…**, then restart. In Default UI layout editing
 mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
 This component does not require WebView2, Spider Monkey Panel or Smooth Browser.
@@ -60,10 +64,17 @@ Speed wheel: 0.1% steps; Shift+wheel: 0.01%; right-click: neutral. **Key lock: O
 changes tempo while preserving pitch; OFF is vinyl-style rate change.
 
 **BPM = A/B** matches the effective tagged BPM of the other deck. Both tags must
-be valid and the required speed must fit ±16%. **SYNC = A/B** also seeks the selected
+be valid and the required speed must fit the destination deck's selected range. **SYNC = A/B** also seeks the selected
 deck slightly to match estimated beat phase; it keeps play/pause states. It is
 one-shot, not continuous tracking or downbeat/bar detection. Dotted grids are
 indicative only and do not satisfy SYNC's automatic confidence requirement.
+
+Click the range button (±16% by default) for ±8%, ±16% or ±50%. A narrower
+range clamps the current speed if needed. The range is saved per deck.
+Use the transposition −/+ buttons for semitone steps; click the centre to reset.
+This changes pitch without changing tempo. The transposed tagged key is displayed.
+Green/OK means a usual Camelot pair; amber/~ means another pair; grey/? means
+unknown metadata or non-neutral vinyl speed. These are harmonic hints, not guarantees.
 
 For manual grids, pause, zoom, click a transient, then **Beat here**. Use ±10 ms
 buttons or the grid-row wheel (Shift: 1 ms). **Auto** removes the override. Manual

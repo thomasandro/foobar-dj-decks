@@ -14,5 +14,17 @@ int main(){
  assert(match(100,60,1,speed)==Match::outside && speed==1.03);
  assert(match(0,120,1,speed)==Match::missing && speed==1.03);
  assert(match(120,std::numeric_limits<double>::quiet_NaN(),1,speed)==Match::missing);
+ for(double range : {8.0,16.0,50.0}) {
+   const double r=range/100;
+   assert(match(100,100*(1-r),1,speed,range)==Match::ok && std::abs(speed-(1-r))<1e-9);
+   assert(match(100,100*(1+r),1,speed,range)==Match::ok && std::abs(speed-(1+r))<1e-9);
+   speed=1;
+   assert(match(100,100*(1+r)+1,1,speed,range)==Match::outside && speed==1);
+   assert(match(100,100*(1-r)-1,1,speed,range)==Match::outside && speed==1);
+   assert(clamp(2,range)==1+r && clamp(0,range)==1-r);
+ }
+ assert(match(100,140,1,speed,50)==Match::ok && std::abs(speed-1.4)<1e-9);
+ assert(match(100,110,1,speed,8)==Match::outside);
+ assert(match(100,100,1.4,speed,50)==Match::ok);
  std::cout<<"Tempo matching tests passed: both directions, adjusted reference, range, invalid tags\n";
 }

@@ -23,6 +23,7 @@
 #include "foo_dj_version.h"
 #include "webview_drop.h"
 #include "tempo_match.h"
+#include "musical_key.h"
 #include "beat_sync.h"
 #include "dj_language.h"
 #include "third_party/soundtouch/include/SoundTouch.h"
@@ -99,6 +100,7 @@ namespace {
 		unsigned rate = 0, channels = 0;         // format du fichier (frequence, canaux)
 		double length = 0;                       // duree en secondes
 		std::wstring bpm;
+		std::wstring musicalKey;
 		double bpmValue = 0;
 		std::shared_ptr<soundtouch::SoundTouch> stretch;
 		bool stretchFlushed = false;
@@ -189,12 +191,13 @@ namespace {
 		}
 		DrainStretch(d);
 	}
-	static void FillDeck(Deck & d, size_t wantFrames, unsigned outRate, abort_callback & abort, double speed, bool fixedPitch) {
+	static void FillDeck(Deck & d, size_t wantFrames, unsigned outRate, abort_callback & abort, double speed, bool fixedPitch, int semitones = 0) {
 		if (!d.stretch) {
 			d.stretch = std::make_shared<soundtouch::SoundTouch>();
 			d.stretch->setSampleRate(outRate); d.stretch->setChannels(2);
 			d.stretch->setPitch(1.0); d.stretchFlushed = false;
 		}
+		d.stretch->setPitchSemiTones(semitones);
 		d.stretch->setRate(fixedPitch ? 1.0 : speed);
 		d.stretch->setTempo(fixedPitch ? speed : 1.0);
 		FeedStretch(d, outRate);
@@ -309,10 +312,13 @@ namespace {
 		CRect cover;
 		CRect title;      // "DECK A"
 		CRect gridControl[4];
+        CRect pitch[3];
+        CRect analyse[3];
 		CRect beat;
 		CRect key;
 		CRect sync;
 		CRect speed;
+        CRect range;
 		CRect artist;
 		CRect name;       // nom du fichier
 		CRect info;       // temps ecoule / duree / format
@@ -343,17 +349,25 @@ namespace {
 		L.zoomOut = CRect(right - 48, d.top + 92, right - 26, d.top + 114);
 		L.zoomIn = CRect(right - 24, d.top + 92, right, d.top + 114);
 
-		const int waveTop = d.top + 120, waveBottom = d.bottom - 148;
+		for(int k=0;k<3;++k) {
+            const int cell=(right-left-6)/3;
+            L.analyse[k]=CRect(left+k*(cell+3),d.top+120,left+k*(cell+3)+cell,d.top+144);
+        }
+        const int waveTop = d.top + 150, waveBottom = d.bottom - 178;
 		L.wave = CRect(left, waveTop, right - 46, waveBottom);
 		L.vol = CRect(right - 38, waveTop, right, waveBottom);
 		for (int i = 0; i < 4; ++i) {
 			const int cell = (right-left-9)/4;
-			L.gridControl[i] = CRect(left+i*(cell+3),d.bottom-142,left+i*(cell+3)+cell,d.bottom-118);
+			L.gridControl[i] = CRect(left+i*(cell+3),d.bottom-172,left+i*(cell+3)+cell,d.bottom-148);
 		}
+        L.pitch[0]=CRect(left,d.bottom-142,left+30,d.bottom-118);
+        L.pitch[1]=CRect(left+34,d.bottom-142,right-34,d.bottom-118);
+        L.pitch[2]=CRect(right-30,d.bottom-142,right,d.bottom-118);
 		L.key = CRect(left, d.bottom - 112, right - 92, d.bottom - 88);
 		L.beat = CRect(right - 86, L.key.top, right, L.key.bottom);
 		L.speed = CRect(left, d.bottom - 82, right, d.bottom - 48);
 		L.sync = CRect(right - 86, L.speed.top, right, L.speed.top + 20);
+        L.range=CRect(left,L.speed.top,left+64,L.speed.top+20);
 
 		const int gap = 6;
 		const int w = (right - left - gap) / 2;
@@ -397,7 +411,7 @@ namespace {
 
 	class CDjDropTarget;   // defini plus bas : recoit les morceaux glisses sur le panneau
 
-	class CDjPanel : public ui_element_instance, public CWindowImpl<CDjPanel> {
+	class CDjPanel : public ui_element_instance, public CWindowImpl<CDjPanel>, public metadb_io_callback_dynamic_impl_base {
 	public:
 		// Nom interne de la classe de fenetre (identifiant unique, different de celui de l'exemple).
 		DECLARE_WND_CLASS_EX(TEXT("{3E9B6D14-2A7C-4F58-B1D6-8A4C05E7D932}"), CS_VREDRAW | CS_HREDRAW, (-1));
@@ -411,6 +425,7 @@ namespace {
 
 		BEGIN_MSG_MAP_EX(CDjPanel)
 			MESSAGE_HANDLER(kRestoreMessage, OnRestoreSession)
+            MESSAGE_HANDLER(WM_APP + 173, OnMetadataRefresh)
 			MSG_WM_LBUTTONDOWN(OnLButtonDown)
 			MSG_WM_LBUTTONUP(OnLButtonUp)
 			MSG_WM_RBUTTONDOWN(OnRButtonDown)
@@ -440,7 +455,18 @@ namespace {
 		HRESULT DropLeave();
 		HRESULT DropDrop(IDataObject * obj, POINTL pt, DWORD * effect);
 
-	private:
+    public:
+        void on_changed_sorted(metadb_handle_list_cref items, bool) override {
+            if(!m_hWnd) return;
+            for(int i=0;i<2;++i) if(!m_savedPath[i].empty()) {
+                auto h=metadb::get()->handle_create(m_savedPath[i].c_str(),m_savedSubsong[i]);
+                if(metadb_handle_list_helper::bsearch_by_pointer(items,h)!=SIZE_MAX) { PostMessage(WM_APP+173); break; }
+            }
+        }
+    private:
+        LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); return 0; }
+        void RefreshDeckTags(int deck);
+        void AnalyseDeck(int deck,int action);
 		static constexpr UINT_PTR kTimerId = 1;
 		static constexpr size_t kBlockFrames = 1024;   // taille d'un bloc de son envoye a la sortie
 
@@ -510,6 +536,7 @@ namespace {
 
 		// Dernieres valeurs lues dans les decks, pour l'affichage (thread de l'interface seulement)
 		std::wstring m_cacheInfo[2];
+        std::wstring m_cacheKey[2];
 		bool m_cachePlaying[2] = { false, false };
 		bool m_cacheLoaded[2] = { false, false };
 		double m_cacheLength[2] = { 0.0, 0.0 };
@@ -547,6 +574,8 @@ namespace {
 		std::atomic<float> m_crossfade{ 0.5f };   // position du crossfader : 0 = deck A seul, 1 = deck B seul
 		std::atomic<bool> m_fixedPitch[2];
 		std::atomic<double> m_speed[2];
+        std::atomic<int> m_speedRange[2];
+        std::atomic<int> m_transpose[2];
 		std::atomic<float> m_volume[2];           // volume de chaque deck : 0 a 1
 		std::atomic<int> m_stallMs{ 0 };          // depuis combien de ms la sortie audio n'est plus prete (0 = tout va bien)
 
@@ -570,6 +599,8 @@ namespace {
 		g_english = cfg_language.get() != 0;
 		m_fixedPitch[0] = m_fixedPitch[1] = true;
 		m_speed[0] = m_speed[1] = 1.0;
+        m_speedRange[0] = m_speedRange[1] = 16;
+        m_transpose[0] = m_transpose[1] = 0;
 		m_volume[0] = 1.0f;
 		m_volume[1] = 1.0f;
 	}
@@ -644,8 +675,8 @@ namespace {
 			Deck & own = m_deck[deck]; const Deck & ref = m_deck[1-deck];
 			if (!own.loaded || !ref.loaded || !own.wave || !ref.wave) { m_error[deck] = L"Charge les deux platines"; return; }
 			double speed = m_speed[deck].load();
-			const auto match = dj_tempo::match(own.bpmValue, ref.bpmValue, m_speed[1-deck].load(), speed);
-			if (match != dj_tempo::Match::ok) { m_error[deck] = match == dj_tempo::Match::missing ? L"Deux tags BPM valides requis" : L"BPM hors plage (-16 / +16 %)"; return; }
+			const auto match = dj_tempo::match(own.bpmValue, ref.bpmValue, m_speed[1-deck].load(), speed, m_speedRange[deck].load());
+			if (match != dj_tempo::Match::ok) { m_error[deck] = match == dj_tempo::Match::missing ? L"Deux tags BPM valides requis" : (g_english.load()?L"BPM outside selected range":L"BPM hors plage choisie"); return; }
 			const double now = own.framesPlayed / m_outRate, refNow = ref.framesPlayed / m_outRate;
 			dj_beats::Grid ownGrid, refGrid;
 			{ std::lock_guard<std::mutex> lockWave(own.wave->m); ownGrid = dj_beats::fit(own.wave->rms, own.bpmValue, now); }
@@ -673,9 +704,9 @@ namespace {
 			std::lock_guard<std::mutex> lock(m_lock);
 			if (!m_deck[0].loaded || !m_deck[1].loaded) { m_error[deck] = L"Charge les deux platines"; return; }
 			double speed = m_speed[deck].load();
-			const auto result = dj_tempo::match(m_deck[deck].bpmValue, m_deck[1-deck].bpmValue, m_speed[1-deck].load(), speed);
+			const auto result = dj_tempo::match(m_deck[deck].bpmValue, m_deck[1-deck].bpmValue, m_speed[1-deck].load(), speed, m_speedRange[deck].load());
 			if (result == dj_tempo::Match::missing) { m_error[deck] = L"Deux tags BPM valides requis"; return; }
-			if (result == dj_tempo::Match::outside) { m_error[deck] = L"BPM hors plage (-16 / +16 %)"; return; }
+			if (result == dj_tempo::Match::outside) { m_error[deck] = (g_english.load()?L"BPM outside selected range":L"BPM hors plage choisie"); return; }
 			m_speed[deck] = speed; m_error[deck].clear();
 		}
 		SaveSession();
@@ -686,7 +717,8 @@ namespace {
 		const int left = area.left + 10, right = area.right - 10;
 		if (right <= left) return;
 		const double value = (std::max)(0.0, (std::min)(1.0, (double)(x-left)/(right-left)));
-		m_speed[deck] = 0.84 + value * 0.32; Invalidate();
+		const double r=dj_tempo::range(m_speedRange[deck].load());
+        m_speed[deck] = 1-r + value * 2*r; Invalidate();
 	}
 
 	void CDjPanel::ViewWindow(int deck, double & t0, double & width) const {
@@ -916,6 +948,7 @@ namespace {
 				std::unique_lock<std::mutex> lock(m_lock, std::try_to_lock);
 				if (lock.owns_lock()) {
 					const Deck & dk = m_deck[i];
+                    for (int k=0;k<2;++k) m_cacheKey[k] = m_deck[k].loaded ? m_deck[k].musicalKey : L"";
 					m_cachePlaying[i] = dk.playing;
 					m_cacheLoaded[i] = dk.loaded;
 					m_cacheLength[i] = dk.length;
@@ -938,6 +971,7 @@ namespace {
 							if (dk.bpmValue > 0) { wchar_t tempo[64]; swprintf_s(tempo, L"  |  %.1f BPM", dk.bpmValue * m_speed[i].load()); text += tempo; }
 							else text += L"  |  " + dk.bpm + L" BPM";
 						}
+						// Musical key is drawn separately as a colored compatibility badge.
 						text += extra;
 					}
 					m_cacheInfo[i] = text;
@@ -1006,11 +1040,44 @@ namespace {
 			dc.SetTextColor(kMuted);
 			DrawScrolling(dc, L.artist, m_artist[i].c_str(), i, 1);
 			dc.SetTextColor(kMuted);
-			if (!info.empty()) {
-				dc.DrawText(info.c_str(), -1, &L.info, DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-			}
+            CRect infoRect=L.info;
+            const bool stable=(m_fixedPitch[0].load() || std::abs(m_speed[0].load()-1.0)<0.000001)
+                && (m_fixedPitch[1].load() || std::abs(m_speed[1].load()-1.0)<0.000001);
+            const auto harmony=dj_key::compatibility(dj_key::transpose(m_cacheKey[0],m_transpose[0].load()),dj_key::transpose(m_cacheKey[1],m_transpose[1].load()),stable);
+            std::wstring keyText=dj_key::label(dj_key::transpose(m_cacheKey[i],m_transpose[i].load()));
+            if (keyText.empty()) keyText=L"?";
+            keyText += harmony==dj_key::Compatibility::usual ? L"  OK" : harmony==dj_key::Compatibility::other ? L"  ~" : L"  ?";
+            SIZE keySize={}; dc.GetTextExtent(keyText.c_str(),(int)keyText.size(),&keySize);
+            CRect keyRect=L.info;
+            const int keyWidth=(std::min)((int)keySize.cx+14,(std::max)(50,L.info.Width()/2));
+            keyRect.left=keyRect.right-keyWidth;
+            infoRect.right=keyRect.left-6;
+            const COLORREF harmonyColor=harmony==dj_key::Compatibility::usual ? RGB(95,220,145)
+                : harmony==dj_key::Compatibility::other ? RGB(255,180,75) : kMuted;
+            DrawControl(dc,keyRect,RGB(19,24,32),harmonyColor);
+            dc.SetTextColor(harmonyColor);
+            dc.DrawText(keyText.c_str(),-1,&keyRect,DT_NOPREFIX|DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+            dc.SetTextColor(kMuted);
+            if (!info.empty()) dc.DrawText(info.c_str(),-1,&infoRect,DT_NOPREFIX|DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
 
-			// Boutons de zoom
+			// Semitone transposition is independent of tempo; centre resets to zero.
+            for(int k=0;k<3;++k) DrawControl(dc,L.pitch[k],RGB(37,45,58),accent);
+            dc.SetTextColor(accent);
+            dc.DrawText(L"-",-1,&L.pitch[0],DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            dc.DrawText(L"+",-1,&L.pitch[2],DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            wchar_t pitchLabel[80];
+            swprintf_s(pitchLabel,g_english.load()?L"Transpose: %+d st (reset)":L"Transposition : %+d demi-tons (0)",m_transpose[i].load());
+            dc.DrawText(pitchLabel,-1,&L.pitch[1],DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+            dc.SetTextColor(kMuted);
+            for(int k=0;k<3;++k) {
+                DrawControl(dc,L.analyse[k],RGB(37,45,58),accent);
+                dc.SetTextColor(accent);
+                const wchar_t* text=g_english.load() ? (k==0?L"Calculate BPM":k==1?L"Calculate key":L"Refresh tags")
+                    : (k==0?L"Calculer BPM":k==1?L"Calculer tonalit\u00e9":L"Actualiser tags");
+                dc.DrawText(text,-1,&L.analyse[k],DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+            }
+            dc.SetTextColor(kMuted);
+            // Boutons de zoom
 			DrawControl(dc, L.zoomOut, RGB(37, 45, 58), RGB(55, 66, 82));
 			dc.DrawText(L"-", -1, &L.zoomOut, DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 			DrawControl(dc, L.zoomIn, RGB(37, 45, 58), RGB(55, 66, 82));
@@ -1050,16 +1117,19 @@ namespace {
 			dc.SetTextColor(accent);
 			dc.DrawText(i == 0 ? L"SYNC = B" : L"SYNC = A", -1, &L.beat, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-			// Per-deck speed slider, neutral in the centre.
+			wchar_t rangeLabel[32]; swprintf_s(rangeLabel,L"\u00b1%d %%",m_speedRange[i].load());
+            DrawControl(dc,L.range,RGB(37,45,58),accent);
+            dc.SetTextColor(accent); dc.DrawText(rangeLabel,-1,&L.range,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            // Per-deck speed slider, neutral in the centre.
 			{
 				const auto area = L.speed; const double speed = m_speed[i].load();
 				wchar_t label[64]; swprintf_s(label, Tr(L"Vitesse  %+.1f %%"), (speed-1.0)*100.0);
-				CRect caption(area.left, area.top, L.sync.left - 5, area.top+16);
+				CRect caption(L.range.right+4, area.top, L.sync.left - 5, area.top+16);
 				dc.SetTextColor(kMuted); dc.DrawText(label, -1, &caption, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 				const int left = area.left+10, right = area.right-10, y = area.bottom-8;
 				if (right > left) {
 					FillBox(dc, CRect(left,y-1,right,y+1), RGB(55,66,82));
-					const int mid = (left+right)/2, x = left+(int)((right-left)*(speed-0.84)/0.32+0.5);
+					const int mid = (left+right)/2, x = left+(int)((right-left)*(speed-1+dj_tempo::range(m_speedRange[i].load()))/(2*dj_tempo::range(m_speedRange[i].load()))+0.5);
 					FillBox(dc, CRect(mid,y-5,mid+1,y+5), kMuted);
 					DrawControl(dc, CRect(x-4,y-5,x+5,y+6), accent, accent);
 				}
@@ -1162,9 +1232,29 @@ namespace {
 			if (L.wave.PtInRect(point)) { SeekFromWaveX(i, point.x, rc); Invalidate(); return; }
 			for (int control = 0; control < 4; ++control) if (L.gridControl[control].PtInRect(point)) { EditGrid(i,control); Invalidate(); return; }
 			if (L.beat.PtInRect(point)) { SyncBeats(i); Invalidate(); return; }
-			if (L.key.PtInRect(point)) { m_fixedPitch[i] = !m_fixedPitch[i].load(); SaveSession(); Invalidate(); return; }
+			for(int k=0;k<3;++k) if(L.analyse[k].PtInRect(point)) { AnalyseDeck(i,k); return; }
+            for(int k=0;k<3;++k) if(L.pitch[k].PtInRect(point)) {
+                m_transpose[i]=k==1?0:(std::max)(-12,(std::min)(12,m_transpose[i].load()+(k==0?-1:1)));
+                SaveSession(); Invalidate(); return;
+            }
+            if (L.key.PtInRect(point)) { m_fixedPitch[i] = !m_fixedPitch[i].load(); SaveSession(); Invalidate(); return; }
 			if (L.sync.PtInRect(point)) { MatchTempo(i); Invalidate(); return; }
-			if (L.speed.PtInRect(point)) { m_drag = 4 + i; SetCapture(); SetSpeedFromX(i, point.x, rc); return; }
+			if(L.range.PtInRect(point)) {
+                HMENU menu=CreatePopupMenu();
+                for(int value:{8,16,50}) {
+                    wchar_t text[24]; swprintf_s(text,L"\u00b1%d %%",value);
+                    AppendMenuW(menu,MF_STRING|(m_speedRange[i]==value?MF_CHECKED:0),value,text);
+                }
+                CPoint screen(L.range.left,L.range.bottom); ClientToScreen(&screen);
+                int selected=(int)TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,screen.x,screen.y,0,m_hWnd,nullptr);
+                DestroyMenu(menu);
+                if(selected==8 || selected==16 || selected==50) {
+                    m_speedRange[i]=selected; m_speed[i]=dj_tempo::clamp(m_speed[i].load(),selected);
+                    m_error[i].clear(); SaveSession(); Invalidate();
+                }
+                return;
+            }
+            if (L.speed.PtInRect(point)) { m_drag = 4 + i; SetCapture(); SetSpeedFromX(i, point.x, rc); return; }
 			if (L.vol.PtInRect(point)) {              // volume : on attrape le curseur
 				m_drag = 2 + i;
 				SetCapture();
@@ -1224,7 +1314,7 @@ namespace {
 			if (gridRow.PtInRect(pt)) { EditGrid(i,zDelta < 0 ? 0 : 2, ((nFlags & MK_SHIFT) ? 0.001 : 0.01) * std::abs((double)zDelta) / WHEEL_DELTA); Invalidate(); return TRUE; }
 			if (MakeLayout(i, rc).speed.PtInRect(pt)) {
 				const double step = (nFlags & MK_SHIFT) ? 0.0001 : 0.001;
-				m_speed[i] = (std::max)(0.84, (std::min)(1.16, m_speed[i].load() + (double)zDelta / WHEEL_DELTA * step));
+				m_speed[i] = dj_tempo::clamp(m_speed[i].load() + (double)zDelta / WHEEL_DELTA * step,m_speedRange[i].load());
 				Invalidate(); return TRUE;
 			}
 			if (MakeLayout(i, rc).wave.PtInRect(pt)) {
@@ -1248,6 +1338,50 @@ namespace {
 	// Ouvre un morceau (adresse foobar2000 + numero de sous-piste) avec le decodeur de foobar2000,
 	// lit sa duree et decode un premier bloc (qui sert aussi a connaitre le format). Le deck est
 	// ensuite pret a jouer, et la forme d'onde se calcule en arriere-plan.
+    void CDjPanel::RefreshDeckTags(int deck) {
+        if(m_savedPath[deck].empty()) return;
+        auto handle=metadb::get()->handle_create(m_savedPath[deck].c_str(),m_savedSubsong[deck]);
+        file_info_impl info;
+        if(!handle->get_info(info)) return;
+        std::wstring key,bpmText; double bpm=0;
+        for(const char* field:{"INITIALKEY","INITIAL KEY","KEY"}) {
+            auto tag=info.meta_get(field,0);
+            if(tag) key=dj_key::display(pfc::stringcvt::string_wide_from_utf8(tag).get_ptr());
+            if(!key.empty()) break;
+        }
+        auto tag=info.meta_get("BPM",0);
+        if(!tag || !*tag) tag=info.meta_get("TEMPO",0);
+        if(tag) {
+            std::string value=tag;
+            bpmText=pfc::stringcvt::string_wide_from_utf8(tag).get_ptr();
+            std::replace(value.begin(),value.end(),',','.');
+            std::istringstream parser(value); parser.imbue(std::locale::classic());
+            if(!(parser>>bpm) || !std::isfinite(bpm) || bpm<=0) bpm=0;
+        }
+        { std::lock_guard<std::mutex> lock(m_lock);
+          if(!m_deck[deck].loaded) return;
+          m_deck[deck].musicalKey=key; m_deck[deck].bpm=bpmText; m_deck[deck].bpmValue=bpm;
+        }
+        m_gridStamp[deck]=0; Invalidate();
+    }
+    void CDjPanel::AnalyseDeck(int deck,int action) {
+        if(m_savedPath[deck].empty()) {
+            popup_message::g_show(g_english.load()?"Load a track first.":"Chargez d'abord un morceau.","DJ Decks"); return;
+        }
+        if(action==2) { RefreshDeckTags(deck); return; }
+        // Public context-command identifiers from the components' upstream sources.
+        static const GUID bpm={0x518d0234,0x3134,0x4fea,{0xbd,0x43,0x8f,0x61,0xee,0x3a,0x35,0x3b}};
+        static const GUID key={0xefb0d751,0x1a4e,0x4ea3,{0x9d,0x22,0x68,0x25,0x64,0xe7,0xad,0xca}};
+        metadb_handle_list tracks;
+        tracks.add_item(metadb::get()->handle_create(m_savedPath[deck].c_str(),m_savedSubsong[deck]));
+        // Never hold the audio mutex while another component opens a modal dialog.
+        try {
+            if(!menu_helpers::run_command_context(action==0?bpm:key,pfc::guid_null,tracks))
+                popup_message::g_show(g_english.load()?"Analysis command unavailable. Check foo_bpm / foo_musical_key installation.":"Commande indisponible. Verifiez l'installation de foo_bpm / foo_musical_key.","DJ Decks");
+        } catch(const std::exception& e) { popup_message::g_show(e.what(),"DJ Decks"); }
+        RefreshDeckTags(deck);
+    }
+
 	void CDjPanel::LoadDeck(int deck, const char * path, t_uint32 subsong) {
 		StopWaveThread(deck);   // l'ancienne analyse n'a plus d'interet
 		m_view[deck] = 0.0;     // on repart en vue complete
@@ -1278,6 +1412,21 @@ namespace {
 			file_info_impl info;
 			nd.helper->get_info(subsong, info, abort);
 			nd.length = info.get_length();
+            // Key analysers can store metadata in foobar's DB without writing the file.
+            // Prefer the host's current metadata, falling back to decoder file tags.
+            file_info_impl libraryInfo;
+            auto handle = metadb::get()->handle_create(location);
+            const bool haveLibraryInfo = handle->get_info(libraryInfo);
+            for (int source = 0; source < 2 && nd.musicalKey.empty(); ++source) {
+                if (source == 0 && !haveLibraryInfo) continue;
+                const file_info& keyInfo = source == 0 ? static_cast<const file_info&>(libraryInfo) : static_cast<const file_info&>(info);
+                for (const char* field : {"INITIALKEY", "INITIAL KEY", "KEY"}) {
+                    const char* tag = keyInfo.meta_get(field, 0);
+                    if (!tag) continue;
+                    nd.musicalKey = dj_key::display(pfc::stringcvt::string_wide_from_utf8(tag).get_ptr());
+                    if (!nd.musicalKey.empty()) break;
+                }
+            }
 			const char * bpmTag = info.meta_get("bpm", 0);
 			if (!bpmTag || !*bpmTag) bpmTag = info.meta_get("tempo", 0);
 			if (bpmTag && *bpmTag) {
@@ -1378,6 +1527,8 @@ namespace {
 			item["subsong"] = picojson::value((double)m_savedSubsong[i]);
 			item["fixedPitch"] = picojson::value(m_fixedPitch[i].load());
 			item["speed"] = picojson::value(m_speed[i].load());
+            item["speedRange"] = picojson::value((double)m_speedRange[i].load());
+            item["transpose"] = picojson::value((double)m_transpose[i].load());
 			item["position"] = picojson::value(m_outRate ? (double)m_deck[i].framesPlayed / m_outRate : 0.0);
 			items.push_back(picojson::value(item));
 		}
@@ -1413,10 +1564,14 @@ namespace {
 			if (file.empty() || file.size() > 32768 || file.find('\0') != std::string::npos || !std::isfinite(sub) || sub < 0 || sub > 4294967295.0 || std::floor(sub) != sub) continue;
 			// Keep the reference even if a removable drive is temporarily unavailable.
 			m_savedPath[i] = file; m_savedSubsong[i] = (t_uint32)sub;
-			const auto & fixed = item.get("fixedPitch");
+			const auto & pitch = item.get("transpose");
+            if(pitch.is<double>() && std::isfinite(pitch.get<double>())) m_transpose[i]=(int)(std::max)(-12.0,(std::min)(12.0,std::round(pitch.get<double>())));
+            const auto & fixed = item.get("fixedPitch");
 			if (fixed.is<bool>()) m_fixedPitch[i] = fixed.get<bool>();
-			const auto & speed = item.get("speed");
-			if (speed.is<double>() && std::isfinite(speed.get<double>())) m_speed[i] = (std::max)(0.84, (std::min)(1.16, speed.get<double>()));
+			const auto & range = item.get("speedRange");
+            if(range.is<double>() && (range.get<double>()==8 || range.get<double>()==16 || range.get<double>()==50)) m_speedRange[i]=(int)range.get<double>();
+            const auto & speed = item.get("speed");
+			if (speed.is<double>() && std::isfinite(speed.get<double>())) m_speed[i] = dj_tempo::clamp(speed.get<double>(),m_speedRange[i].load());
 			LoadDeck(i, file.c_str(), (t_uint32)sub);
 			if (position.is<double>() && std::isfinite(position.get<double>()) && position.get<double>() > 0) SeekDeck(i, position.get<double>());
 		}
@@ -1795,7 +1950,7 @@ namespace {
 						Deck & d = m_deck[i];
 						if (!d.playing) continue;
 						try {
-							FillDeck(d, kBlockFrames, outRate, abort, speeds[i], fixedPitch[i]);
+							FillDeck(d, kBlockFrames, outRate, abort, speeds[i], fixedPitch[i], m_transpose[i].load());
 						} catch (const std::exception & e) {
 							pfc::stringcvt::string_wide_from_utf8 message(e.what());
 							d.playing = false;

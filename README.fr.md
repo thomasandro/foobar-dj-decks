@@ -3,16 +3,16 @@
 [English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
-**0.12.0-alpha.1 est une préversion alpha expérimentale.**
+**0.15.0-alpha.1 est une préversion alpha expérimentale.**
 
 ## ⬇ Télécharger l’extension
 
-**[Télécharger DJ Decks 0.12.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.12.0-alpha.1/foo_dj-0.12.0-alpha.1-win-x64.fb2k-component)**
+**[Télécharger DJ Decks 0.15.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.15.0-alpha.1/foo_dj-0.15.0-alpha.1-win-x64.fb2k-component)**
 
 Fichier installable `.fb2k-component` pour foobar2000 2.x x64.
 Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
 
-[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.12.0-alpha.1)
+[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.15.0-alpha.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
 
@@ -22,8 +22,12 @@ ainsi que les retours reproductibles sont bienvenus.
 - Volumes séparés, crossfader à puissance constante, variations de gain lissées.
 - Formes d’onde avec zoom, clic pour se déplacer et indication de la partie déjà jouée.
 - Pochettes ; titre et artiste sur deux lignes défilantes ; interface français/anglais.
-- Affichage du BPM renseigné dans les tags ; vitesse de −16 % à +16 %.
+- Affichage du BPM renseigné dans les tags ; plages de vitesse au choix : ±8 %, ±16 % ou ±50 %.
 - Mode vinyle ou tempo avec tonalité préservée par SoundTouch.
+- Transposition indépendante de −12 à +12 demi-tons, sans modifier le tempo.
+- Tonalité Camelot et classique, par exemple 8A (Am), avec indicateur de compatibilité coloré.
+- Calcul BPM/tonalité via les composants facultatifs foo_bpm / foo_musical_key,
+  actualisation sans recharger le son. [Détails](docs/DECK_ANALYSIS.md).
 - Égalisation des BPM ; premier calage ponctuel des battements, expérimental.
 - Repères estimés/manuels continus ; grille indicative en pointillés si la détection est incertaine.
 - Réglage manuel de grille, « Temps ici » et retour Auto, mémorisés par fichier/sous-piste.
@@ -38,7 +42,7 @@ ont été faits avec foobar2000 2.26.3 preview du 8 novembre 2026. Les autres ve
 Columns UI n’est fournie.
 
 Pour le premier essai, utiliser un profil portable séparé. Installer
-`foo_dj-0.12.0-alpha.1-win-x64.fb2k-component` via
+`foo_dj-0.15.0-alpha.1-win-x64.fb2k-component` via
 **Préférences → Composants → Installer…**, puis redémarrer. Dans l’édition de disposition
 de Default UI, ajouter **DJ Decks** (Utilitaires). Un grand panneau est préférable ;
 commencer vers 900 × 650 px. WebView2, SMP et Smooth Browser ne sont pas nécessaires. Le composant utilise
@@ -59,11 +63,18 @@ limiteur de sortie n’est prévu.
 
 Molette sur la vitesse : pas de 0,1 % ; Maj+molette : 0,01 % ; clic droit : 0 %.
 « Tonalité fixe : OUI » conserve la hauteur ; le mode vinyle la fait varier.
-« BPM = A/B » égale le BPM effectif de l’autre platine, dans la plage ±16 % et avec
+« BPM = A/B » égale le BPM effectif de l’autre platine, dans la plage choisie sur cette platine et avec
 deux tags valides. « SYNC = A/B » ajuste aussi la position de la platine choisie,
 sans changer lecture/pause. C’est un calage ponctuel, sans suivi continu ni détection
 du premier temps de mesure. Les pointillés n’attestent pas un calage et ne valident
 pas une grille automatique pour SYNC.
+
+Cliquer sur ±16 % pour choisir ±8 %, ±16 % ou ±50 %. Une plage plus étroite
+ramène la vitesse à sa limite si nécessaire. Le choix est mémorisé par platine.
+Les boutons de transposition −/+ changent la hauteur par demi-ton ; le centre remet
+à zéro, sans changer le tempo. La tonalité affichée suit cette transposition.
+Vert/OK : association Camelot habituelle ; orange/~ : autre association ; gris/? :
+tag inconnu ou vitesse vinyle non neutre. Cela reste un guide pour l’oreille.
 
 Pour une grille manuelle : pause, zoom, clic sur une attaque, puis « Temps ici ».
 Décaler de ±10 ms avec les boutons ou à la molette ; Maj donne un pas de 1 ms.
