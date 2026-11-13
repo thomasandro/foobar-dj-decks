@@ -1,2 +1,89 @@
-# foobar-dj-decks
-Experimental dual-deck DJ component for foobar2000 (Windows x64)
+# DJ Decks for foobar2000 (`foo_dj`)
+
+[Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md)
+
+Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
+**0.12.0-alpha.1 is an experimental alpha release.**
+
+[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.12.0-alpha.1)
+Development was AI-assisted; audio and threading review and reproducible bug reports
+are particularly welcome.
+
+## Features
+
+- Independent load, play/pause and seek for A and B; shared start/pause/swap button.
+- Per-deck volume and constant-power crossfader with smoothed gain changes.
+- Waveforms with zoom, elapsed/remaining-region shading and clickable seek.
+- Front covers, artist/title on separate scrolling lines, French/English interface.
+- Tagged BPM display; speed from −16% to +16%, vinyl or SoundTouch key-lock mode.
+- One-click tagged-BPM matching, and experimental beat-phase SYNC.
+- Solid estimated/manual beat markers; dotted indicative BPM grids when detection is uncertain.
+- Manual grid shift, “Beat here”, Auto reset; grids remembered per file and subsong.
+- Loaded tracks and positions restored paused after a normal close.
+- Native foobar/Explorer drag-and-drop; optional compatible WebView2 text payloads.
+
+## Requirements and installation
+
+Windows x64 and foobar2000 2.x x64, Default User Interface. Development use was on
+foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions has
+not been validated. There is no x86, ARM64, macOS or native Columns UI build.
+
+Prefer an isolated portable profile for the first test. Install
+`foo_dj-0.12.0-alpha.1-win-x64.fb2k-component` with
+**Preferences → Components → Install…**, then restart. In Default UI layout editing
+mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
+This component does not require WebView2, Spider Monkey Panel or Smooth Browser.
+It uses the host-provided `shared.dll` and Microsoft C++ runtime. If Windows reports
+a missing MSVCP140/VCRUNTIME140 dependency, install the official
+[Microsoft x64 C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+Do not download individual DLLs from third-party sites.
+
+The release includes the installable component, matching full-source ZIP and SHA-256
+checksums. Install/load on a clean portable profile has not yet been validated.
+For local builds and packaging, see [build instructions](docs/BUILD.md).
+
+## Quick use
+
+Drag a track to each deck. Dropping a selection loads its first track. Play each
+independently or use the common button. It toggles both states, so with only one
+deck playing it pauses that deck and starts the other. Set crossfader and volumes
+before listening to both together; there is no output limiter.
+
+Speed wheel: 0.1% steps; Shift+wheel: 0.01%; right-click: neutral. **Key lock: ON**
+changes tempo while preserving pitch; OFF is vinyl-style rate change.
+
+**BPM = A/B** matches the effective tagged BPM of the other deck. Both tags must
+be valid and the required speed must fit ±16%. **SYNC = A/B** also seeks the selected
+deck slightly to match estimated beat phase; it keeps play/pause states. It is
+one-shot, not continuous tracking or downbeat/bar detection. Dotted grids are
+indicative only and do not satisfy SYNC's automatic confidence requirement.
+
+For manual grids, pause, zoom, click a transient, then **Beat here**. Use ±10 ms
+buttons or the grid-row wheel (Shift: 1 ms). **Auto** removes the override. Manual
+grids are used by SYNC. A phase shift cannot correct an inaccurate BPM or a varying tempo.
+
+## Limits worth knowing
+
+Shutdown has sometimes taken over 40 seconds in the development profile; its cause
+has not been isolated. Do not present this alpha as production-stable. Beat detection
+can reject real music, particularly rubato or weak/percussion-free material. Source
+sample-rate conversion is linear. No headphone cue output, EQ, limiter, beat-looping
+or master/slave continuous sync is implemented.
+
+The decks decode through installed foobar inputs and instantiate the configured output,
+but run outside the normal playback transport. Do not assume normal DSP/scrobbling or
+now-playing integration. Main playback may contend for an exclusive audio device.
+See [known issues](docs/KNOWN_ISSUES.md) before testing.
+
+## State, privacy and reporting
+
+`foo_dj-session.json` in the foobar profile stores local file paths, subsongs,
+positions, speed and key-lock state. `foo_dj-grids.json` stores manual phase overrides.
+Language is stored in foobar's configuration. These are local files and must not be
+attached to public reports without redacting private paths. Cover lookup follows
+foobar's configured artwork providers; other installed providers may have their own
+network behavior. DJ Decks adds no update checker or telemetry.
+
+For issues, include the component/foobar versions, architecture, output backend,
+reproduction steps and whether the issue occurs in a clean profile. Do not attach music
+files or private sessions by default. [Licenses and source](THIRD_PARTY_NOTICES.md).

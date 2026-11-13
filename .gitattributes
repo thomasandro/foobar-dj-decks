@@ -1,0 +1,3 @@
+# Preserve exact upstream and matching-source archive bytes.
+* -text
+*.lib binary
