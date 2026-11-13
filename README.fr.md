@@ -1,6 +1,6 @@
 # DJ Decks pour foobar2000 (`foo_dj`)
 
-[English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md)
+[English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
 **0.12.0-alpha.1 est une préversion alpha expérimentale.**
