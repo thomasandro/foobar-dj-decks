@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.18.0-alpha.1 — 2026-11-14 (public prerelease)
+
+Fourth public alpha, based on 0.18.0-dev (detailed below), responding to community
+feedback. Public packaging changes version/documentation only.
+
+- Visible button hover highlights and depressed press appearance, preserving black faces.
+- Single-row lower strip: common transport, crossfader, FR/EN menu; 60 pixels recovered
+  for deck/waveform space. Version is available in the language-menu tooltip.
+- Separate Stop/Release file button on each deck; decoder and waveform readers close,
+  position/settings remain, and Play reopens at the retained position. Both decks are
+  released if they use the same physical file. FREE/LIBRE indicates released state.
+- Native tests include non-overlapping footer/control geometry, distinct offscreen
+  normal/hover/pressed rendering, reader release and 30 synthetic audio cases.
+
+Still experimental/unsigned. Live-host interaction, tag-writing regression, clean-profile
+installation and extended shutdown/unload validation remain pending. No new screenshot
+was taken; the README image is explicitly identified as the earlier 0.17.1 interface.
+
+
+## 0.18.0-dev — local development, not separately published
+
+- Button hover highlights and depressed press appearance; mouse-leave/capture loss
+  clears interaction state. Existing commands still act on mouse down.
+- Compact single-row lower strip: common transport, crossfader and FR/EN menu.
+  Recover 60 pixels of deck/waveform height; version remains in the language tooltip.
+- Explicit per-deck Stop/Release button closes decoder and waveform readers while
+  retaining position/settings. Also releases another deck using the same file.
+  Press Play to reopen at the retained position. Released decks show FREE/LIBRE.
+- Geometry tests cover footer/control separation; offscreen pixel checks distinguish
+  normal, hover and pressed states. Host interaction remains to be verified by the user.
+
 ## 0.17.1-alpha.1 — 2026-11-14 (public prerelease)
 
 Third public alpha, collecting the local milestones 0.16.0-dev, 0.16.1-dev,

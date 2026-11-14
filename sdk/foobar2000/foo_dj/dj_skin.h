@@ -16,14 +16,14 @@ inline void rounded(Gdiplus::GraphicsPath& p,Gdiplus::RectF r,float radius) {
     p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.GetRight()-d,r.Y,d,d,270,90);
     p.AddArc(r.GetRight()-d,r.GetBottom()-d,d,d,0,90);p.AddArc(r.X,r.GetBottom()-d,d,d,90,90);p.CloseFigure();
 }
-inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bool active=false) {
+inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bool active=false,bool pressed=false) {
     if(rect.right-rect.left<2 || rect.bottom-rect.top<2) return;
     ready(); Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     Gdiplus::RectF r((float)rect.left+2,(float)rect.top+1,(float)(rect.right-rect.left)-5,(float)(rect.bottom-rect.top)-5);
     Gdiplus::GraphicsPath shadow;auto sr=r;sr.Y+=3;rounded(shadow,sr,casing?19.f:9.f);
     Gdiplus::SolidBrush shade(Gdiplus::Color(170,0,0,0));g.FillPath(&shade,&shadow);
     Gdiplus::GraphicsPath path;rounded(path,r,casing?19.f:9.f);
-    auto top=casing?color(accent):Gdiplus::Color(255,45,48,52);
+    auto top=casing?color(accent):pressed?Gdiplus::Color(255,12,15,20):active?Gdiplus::Color(255,68,76,86):Gdiplus::Color(255,45,48,52);
     auto bottom=casing?Gdiplus::Color(255,(BYTE)(GetRValue(accent)*.65),(BYTE)(GetGValue(accent)*.65),(BYTE)(GetBValue(accent)*.65)):Gdiplus::Color(255,5,7,10);
     Gdiplus::LinearGradientBrush gradient(Gdiplus::PointF(r.X,r.Y),Gdiplus::PointF(r.X,r.GetBottom()),top,bottom);
     g.FillPath(&gradient,&path);
@@ -32,7 +32,7 @@ inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bo
     Gdiplus::Pen outline(casing?color(accent):color(active?accent:RGB(80,87,96)),active?1.8f:1.f);g.DrawPath(&outline,&path);
     auto saved=g.Save();g.SetClip(&path);
     Gdiplus::RectF gloss(r.X+3,r.Y+2,r.Width-6,(std::min)(casing?48.f:25.f,r.Height*.48f));
-    Gdiplus::LinearGradientBrush shine(Gdiplus::PointF(gloss.X,gloss.Y),Gdiplus::PointF(gloss.X,gloss.GetBottom()),Gdiplus::Color(casing?125:80,255,255,255),Gdiplus::Color(0,255,255,255));
+    Gdiplus::LinearGradientBrush shine(Gdiplus::PointF(gloss.X,gloss.Y),Gdiplus::PointF(gloss.X,gloss.GetBottom()),Gdiplus::Color(casing?125:pressed?20:active?115:80,255,255,255),Gdiplus::Color(0,255,255,255));
     Gdiplus::GraphicsPath reflection;
     reflection.StartFigure();reflection.AddLine(gloss.X,gloss.Y,gloss.GetRight(),gloss.Y);
     reflection.AddBezier(gloss.GetRight(),gloss.Y,gloss.GetRight()-4,gloss.GetBottom(),gloss.X+gloss.Width*.28f,gloss.Y+gloss.Height*.55f,gloss.X,gloss.GetBottom());
@@ -43,7 +43,7 @@ inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bo
     Gdiplus::Pen highlight(Gdiplus::Color(casing?180:105,255,255,255),1.f);
     g.DrawLine(&highlight,r.X+8,r.Y+3,r.GetRight()-8,r.Y+3);
 }
-enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker };
+enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release };
 inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)) {
     const int width=rect.right-rect.left,height=rect.bottom-rect.top;
     if(width<8 || height<8) return;
@@ -56,6 +56,7 @@ inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)
     auto triangle=[&](float x,float y,float w,float h){Gdiplus::PointF pts[]={{x,y},{x+w,y+h/2},{x,y+h}};g.FillPolygon(&brush,pts,3);};
     auto note=[&](){line(10,5,10,16);line(10,5,17,3);line(17,3,17,14);g.FillEllipse(&brush,5.f,14.f,5.f,4.f);g.FillEllipse(&brush,12.f,12.f,5.f,4.f);};
     switch(kind) {
+    case Icon::release:g.FillRectangle(&brush,3.f,5.f,10.f,14.f);line(15,12,23,12);line(20,8,23,12);line(20,16,23,12);break;
     case Icon::play: triangle(6,4,13,16);break;
     case Icon::pause:g.FillRectangle(&brush,6.f,4.f,4.f,16.f);g.FillRectangle(&brush,14.f,4.f,4.f,16.f);break;
     case Icon::start:line(5,4,5,20);{Gdiplus::PointF p[]={{18,4},{7,12},{18,20}};g.FillPolygon(&brush,p,3);}break;

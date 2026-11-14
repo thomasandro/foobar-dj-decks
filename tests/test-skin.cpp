@@ -12,6 +12,10 @@ using namespace ATL;
 int wmain(int argc,wchar_t** argv) {
     for(auto dims : {SIZE{900,650},SIZE{1280,720},SIZE{1920,1080}}) {
         CRect client(0,0,dims.cx,dims.cy);
+        assert(FaderStrip(client).Height()<=52);
+        assert(PlayBothRect(client).right<FaderLeft(client));
+        assert(FaderRight(client)<LanguageRect(client,false).left);
+        assert(LanguageRect(client,true).IsRectEmpty());
         for(int deck=0;deck<2;++deck) {
             auto L=MakeLayout(deck,client);
             assert(L.wave.Width()>0 && L.wave.Height()>0);
@@ -24,6 +28,8 @@ int wmain(int argc,wchar_t** argv) {
             std::vector<CRect> row={L.gridControl[0],L.gridControl[1],L.gridControl[2],L.gridControl[3],L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key};
             for(size_t n=1;n<row.size();++n) assert(row[n-1].right<=row[n].left);
             assert(L.wave.bottom<L.gridControl[0].top);
+            assert(L.analyse[2].right<L.release.left);
+            assert(L.release.right<=L.deck.right);
         }
     }
     HDC dc=CreateCompatibleDC(nullptr);
@@ -32,11 +38,21 @@ int wmain(int argc,wchar_t** argv) {
     assert(bitmap && pixels);auto old=SelectObject(dc,bitmap);
     RECT all={0,0,1100,740};HBRUSH bg=CreateSolidBrush(RGB(16,19,25));FillRect(dc,&all,bg);DeleteObject(bg);
     CRect client(all);
+    // Hover and pressed states must be visibly distinct from the normal black button.
+    RECT stateRect={0,0,64,44};
+    dj_skin::surface(dc,stateRect,RGB(0,194,211));GdiFlush();
+    std::vector<unsigned char> normal((unsigned char*)pixels,(unsigned char*)pixels+1100*44*4);
+    dj_skin::surface(dc,stateRect,RGB(0,194,211),false,true);GdiFlush();
+    std::vector<unsigned char> hover((unsigned char*)pixels,(unsigned char*)pixels+1100*44*4);
+    dj_skin::surface(dc,stateRect,RGB(0,194,211),false,true,true);GdiFlush();
+    std::vector<unsigned char> pressed((unsigned char*)pixels,(unsigned char*)pixels+1100*44*4);
+    assert(normal!=hover && hover!=pressed && normal!=pressed);
     for(int deck=0;deck<2;++deck) {
         auto L=MakeLayout(deck,client);auto accent=deck?RGB(245,143,27):RGB(0,194,211);
         dj_skin::surface(dc,L.deck,accent,true);
         RECT metadata={L.deck.left+8,L.deck.top+7,L.deck.right-8,L.deck.top+117};dj_skin::surface(dc,metadata,RGB(50,60,68));
         for(int k=0;k<3;++k) {dj_skin::surface(dc,L.analyse[k],accent);dj_skin::icon(dc,L.analyse[k],k==0?dj_skin::Icon::pulse:k==1?dj_skin::Icon::keySearch:dj_skin::Icon::refresh);}
+        dj_skin::surface(dc,L.release,accent);dj_skin::icon(dc,L.release,dj_skin::Icon::release);
         for(int k=0;k<4;++k) {dj_skin::surface(dc,L.gridControl[k],accent);dj_skin::icon(dc,L.gridControl[k],k==0?dj_skin::Icon::left:k==1?dj_skin::Icon::anchor:k==2?dj_skin::Icon::right:dj_skin::Icon::automatic);}
         for(auto r:{L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key,L.beat,L.sync,L.range,L.btn[0],L.btn[1]})dj_skin::surface(dc,r,accent);
         dj_skin::icon(dc,L.matchKey,dj_skin::Icon::keyMatch);dj_skin::icon(dc,L.key,dj_skin::Icon::lock,accent);

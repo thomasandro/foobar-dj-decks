@@ -1,6 +1,6 @@
 # Validation — 2026-11-14
 
-Release: **0.17.1-alpha.1**, based on locally installed 0.17.1-dev.
+Release: **0.18.0-alpha.1**, based on locally installed 0.18.0-dev.
 Release preparation does not launch, capture or monitor foobar. The user's development
 installation was updated separately on request; this does not validate a clean profile.
 
@@ -10,6 +10,13 @@ The user approved the 0.17.1-dev interface and explicitly supplied its screensho
 publication. No new host capture or monitoring was performed. The image is preserved
 unchanged at docs/images/dj-decks-0.17.1.png. Tooltip/tag-writing behavior is not
 inferred from that screenshot.
+
+## 0.18.0 scope
+
+Added compact-footer non-overlap assertions and pixel comparisons distinguishing normal,
+hover and pressed rendering. No host was launched or captured. The existing screenshot
+documents 0.17.1-dev, not this release. Live pointer/capture behavior and manual release
+still require host validation.
 
 ## Automated checks
 

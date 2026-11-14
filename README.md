@@ -3,22 +3,22 @@
 [Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
-**0.17.1-alpha.1 is an experimental alpha release.**
+**0.18.0-alpha.1 is an experimental alpha release.**
 
 ## ⬇ Download the component
 
-**[Download DJ Decks 0.17.1-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.17.1-alpha.1/foo_dj-0.17.1-alpha.1-win-x64.fb2k-component)**
+**[Download DJ Decks 0.18.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.18.0-alpha.1/foo_dj-0.18.0-alpha.1-win-x64.fb2k-component)**
 
 Installable `.fb2k-component` package for foobar2000 2.x x64.
 In foobar2000: **Preferences → Components → Install…**, then restart.
 
-[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.17.1-alpha.1)
+[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.18.0-alpha.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
 
 ![DJ Decks glossy cyan/orange interface](docs/images/dj-decks-0.17.1.png)
 
-*User-supplied screenshot of 0.17.1-dev; the public alpha uses the same interface.*
+*User-supplied screenshot of 0.17.1-dev. Version 0.18.0 adds a compact lower strip, hover/press feedback and Stop/Release buttons.*
 
 ## Features
 
@@ -30,7 +30,9 @@ are particularly welcome.
 - One-click tagged-BPM matching and experimental beat-phase SYNC within the selected range.
 - Independent pitch transposition from −12 to +12 semitones, without changing tempo.
 - One-click harmonic key matching: same key or relative major/minor, nearest transposition.
-- Glossy cyan/orange casings, raised black icon buttons and French/English hover tooltips.
+- Glossy cyan/orange casings, black icon buttons with hover/pressed feedback and bilingual tooltips.
+- Compact lower strip with common transport, crossfader and FR/EN menu.
+- Explicit Stop/Release file button on each deck; Play reopens at the retained position.
 - Camelot + standard musical key labels, e.g. 8A (Am), and colored compatibility badges.
 - Per-deck BPM/key analysis through optional foo_bpm / foo_musical_key components;
   metadata refresh without reloading audio. [Analysis details](docs/DECK_ANALYSIS.md).
@@ -46,7 +48,7 @@ foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions ha
 not been validated. There is no x86, ARM64, macOS or native Columns UI build.
 
 Prefer an isolated portable profile for the first test. Install
-`foo_dj-0.17.1-alpha.1-win-x64.fb2k-component` with
+`foo_dj-0.18.0-alpha.1-win-x64.fb2k-component` with
 **Preferences → Components → Install…**, then restart. In Default UI layout editing
 mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
 This component does not require WebView2, Spider Monkey Panel or Smooth Browser.

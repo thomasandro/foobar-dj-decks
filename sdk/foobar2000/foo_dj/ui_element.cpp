@@ -64,8 +64,8 @@ namespace {
 	static constexpr unsigned kOutChannels = 2;          // le melange est toujours en stereo
 	static constexpr double kHalfPi = 1.57079632679489661923;
 	static constexpr unsigned kPeaksPerSecond = 100;     // precision de la forme d'onde : 100 valeurs par seconde
-	static constexpr int kFaderHeight = 86;              // place reservee au crossfader, en bas de la fenetre
-	static constexpr int kFooterHeight = 26;             // place reservee au numero de version, tout en bas
+	static constexpr int kFaderHeight = 52;              // place reservee au crossfader, en bas de la fenetre
+	static constexpr int kFooterHeight = 0;             // place reservee au numero de version, tout en bas
 	static COLORREF DeckAccent(int deck) { return deck == 0 ? RGB(0, 194, 211) : RGB(245, 143, 27); }
 	static constexpr COLORREF kCanvas = RGB(16, 19, 25);
 	static constexpr COLORREF kSurface = RGB(25, 30, 39);
@@ -75,7 +75,7 @@ namespace {
 		if (rect.Width() <= 0 || rect.Height() <= 0) return;
 		CBrush brush; brush.CreateSolidBrush(color); dc.FillRect(&rect, brush);
 	}
-	static void DrawControl(CDCHandle dc, const CRect & rect, COLORREF fill, COLORREF edge) {
+	static void BaseDrawControl(CDCHandle dc, const CRect & rect, COLORREF fill, COLORREF edge) {
 		if (rect.Width() <= 0 || rect.Height() <= 0) return;
         if(rect.Width()<16 || rect.Height()<16) {
             FillBox(dc,rect,fill); CBrush border; border.CreateSolidBrush(edge); dc.FrameRect(&rect,border);
@@ -324,6 +324,7 @@ namespace {
         CRect pitch[3];
         CRect matchKey;
         CRect analyse[3];
+        CRect release;
 		CRect beat;
 		CRect key;
 		CRect sync;
@@ -361,6 +362,7 @@ namespace {
 
         // Compact, raised hardware-like controls; the waveform keeps most of the space.
         for(int k=0;k<3;++k) L.analyse[k]=CRect(left+k*64,d.top+122,left+k*64+56,d.top+164);
+        L.release=CRect(left+192,d.top+122,left+248,d.top+164);
         const int waveTop=d.top+172,waveBottom=d.bottom-164;
         L.wave=CRect(left,waveTop,right-46,waveBottom);
         L.vol=CRect(right-38,waveTop,right,waveBottom);
@@ -386,27 +388,16 @@ namespace {
 		const int margin = 10;
 		return CRect(client.left + margin, client.bottom - margin - kFaderHeight - kFooterHeight + 6, client.right - margin, client.bottom - margin - kFooterHeight);
 	}
-	static CRect PlayBothRect(const CRect & client) {
-		const CRect strip = FaderStrip(client);
-		const int width = (std::max)(0, (std::min)(170, strip.Width() - 12));
-		const int cx = (strip.left + strip.right) / 2;
-		return CRect(cx - width / 2, strip.top + 2, cx + width / 2, strip.top + 28);
-	}
-	// Extremites de la glissiere du crossfader (on garde de la place pour les lettres A et B).
-	static int FaderLeft(const CRect & client) { return FaderStrip(client).left + 30; }
-	static int FaderRight(const CRect & client) { return FaderStrip(client).right - 30; }
-
-	// Ligne du numero de version : tout en bas, a droite.
-	static CRect VersionRect(const CRect & client) {
-		const int margin = 10;
-		return CRect(client.left + margin, client.bottom - margin - kFooterHeight, client.right - margin, client.bottom - margin + 2);
-	}
-
-	static CRect LanguageRect(const CRect & client, bool english) {
-		const CRect footer = VersionRect(client);
-		const int x = footer.left + (english ? 78 : 0);
-		return CRect(x,footer.top+3,x+72,footer.top+23);
-	}
+    static CRect PlayBothRect(const CRect& client) {
+        auto strip=FaderStrip(client);return CRect(strip.left+8,strip.top+6,strip.left+66,strip.bottom-6);
+    }
+    static int FaderLeft(const CRect& client) { return FaderStrip(client).left+90; }
+    static int FaderRight(const CRect& client) { return FaderStrip(client).right-92; }
+    static CRect VersionRect(const CRect&) { return CRect(0,0,0,0); }
+    static CRect LanguageRect(const CRect& client,bool second) {
+        if(second) return CRect(0,0,0,0);
+        auto strip=FaderStrip(client);return CRect(strip.right-64,strip.top+6,strip.right-8,strip.bottom-6);
+    }
 
 	// Colonne du curseur de volume : zone utile de la glissiere verticale.
 	static int VolTrackTop(const DeckLayout & L) { return L.vol.top + 22; }
@@ -434,6 +425,8 @@ namespace {
 			MSG_WM_LBUTTONUP(OnLButtonUp)
 			MSG_WM_RBUTTONDOWN(OnRButtonDown)
 			MSG_WM_MOUSEMOVE(OnMouseMove)
+            MSG_WM_MOUSELEAVE(OnMouseLeave)
+            MSG_WM_CAPTURECHANGED(OnCaptureChanged)
 			MSG_WM_MOUSEWHEEL(OnMouseWheel)
 			MSG_WM_ERASEBKGND(OnEraseBkgnd)
 			MSG_WM_PAINT(OnPaint)
@@ -481,6 +474,25 @@ namespace {
 		void OnLButtonUp(UINT nFlags, CPoint point);
 		void OnRButtonDown(UINT nFlags, CPoint point);
 		void OnMouseMove(UINT nFlags, CPoint point);
+        CRect m_hotButton={0,0,0,0},m_pressedButton={0,0,0,0};
+        bool m_trackingMouse=false;
+        CRect HitButton(CPoint point,const CRect& rc) const {
+            for(auto r:{PlayBothRect(rc),LanguageRect(rc,false)}) if(r.PtInRect(point))return r;
+            for(int i=0;i<2;++i) {
+                auto L=MakeLayout(i,rc);
+                for(auto r:{L.btn[0],L.btn[1],L.analyse[0],L.analyse[1],L.analyse[2],L.release,L.zoomOut,L.zoomIn,
+                    L.gridControl[0],L.gridControl[1],L.gridControl[2],L.gridControl[3],L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key,L.beat,L.sync,L.range})
+                    if(r.PtInRect(point))return r;
+            }
+            return CRect(0,0,0,0);
+        }
+        void DrawControl(CDCHandle dc,const CRect& r,COLORREF fill,COLORREF edge) {
+            if(!r.IsRectEmpty() && (r==m_hotButton || r==m_pressedButton))
+                dj_skin::surface(dc,r,edge,false,true,r==m_pressedButton);
+            else BaseDrawControl(dc,r,fill,edge);
+        }
+        void OnMouseLeave() { m_trackingMouse=false;m_hotButton.SetRectEmpty();Invalidate(); }
+        void OnCaptureChanged(HWND) { m_pressedButton.SetRectEmpty();m_drag=0;Invalidate(); }
 		BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 		void OnPaint(CDCHandle);
         struct Tip { CRect rect; std::wstring text; };
@@ -965,6 +977,7 @@ namespace {
         auto add=[&](CRect r,const wchar_t* fr,const wchar_t* english){if(r.Width()>0 && r.Height()>0)m_tips.push_back({r,en?english:fr});};
         for(int i=0;i<2;++i) {
             const auto L=MakeLayout(i,client);
+            add(L.release,L"Arr\u00eater et lib\u00e9rer le fichier. Position conserv\u00e9e ; Lecture reprend au m\u00eame endroit. Lib\u00e8re aussi l'autre platine si elle utilise ce fichier.",L"Stop and release the file. Retains position; Play resumes there. Also releases the other deck if it uses this file.");
             add(L.analyse[0],L"Calculer le BPM avec foo_bpm. La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using foo_bpm. Pauses and releases the file for tag writing. Resume after saving the result.");
             add(L.analyse[1],L"Calculer la tonalit\u00e9 avec foo_musical_key. Reprendre la lecture apr\u00e8s la fin de l'analyse et l'enregistrement des tags.",L"Calculate key using foo_musical_key. Resume after analysis and tag writing have finished.");
             add(L.analyse[2],L"Actualiser les tags : relire le BPM et la tonalit\u00e9 et afficher les valeurs. Ne lance pas d'analyse audio.",L"Refresh tags: read BPM and key and show their values. Does not analyse audio.");
@@ -989,9 +1002,9 @@ namespace {
             add(L.btn[1],L"Retour au d\u00e9but du morceau.",L"Return to the beginning of the track.");
         }
         add(PlayBothRect(client),L"Inverser les deux \u00e9tats : lecture ensemble, pause ensemble ou \u00e9change de la platine en lecture.",L"Toggle both states: play together, pause together or swap the playing deck.");
-        CRect fader=FaderStrip(client);fader.top+=32;
+        CRect fader=FaderStrip(client);fader.left=FaderLeft(client)-10;fader.right=FaderRight(client)+10;
         add(fader,L"Crossfader : doser les platines A et B.",L"Crossfader: blend decks A and B.");
-        add(LanguageRect(client,false),L"Interface et infobulles en fran\u00e7ais.",L"French interface and tooltips.");
+        add(LanguageRect(client,false),L"Choisir la langue. DJ Decks " FOO_DJ_VERSION_W,L"Choose interface language. DJ Decks " FOO_DJ_VERSION_W);
         add(LanguageRect(client,true),L"Interface et infobulles en anglais.",L"English interface and tooltips.");
         for(size_t n=0;n<m_tips.size();++n) {
             TOOLINFOW ti={sizeof(ti)};ti.uFlags=TTF_SUBCLASS;ti.hwnd=m_hWnd;ti.uId=n+1;ti.rect=m_tips[n].rect;ti.lpszText=LPSTR_TEXTCALLBACKW;
@@ -1107,7 +1120,7 @@ namespace {
 				dc.SetTextColor(accent);
 				dc.DrawText(titles[i], -1, &L.title, DT_NOPREFIX | DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 				CRect status = L.title; status.left = (std::max)(L.title.left + 64, status.right - 60);
-				dc.DrawText(playing ? Tr(L"LECTURE") : (m_cacheReleased[i] ? (g_english.load()?L"TAGS":L"TAGS") : (m_cacheLoaded[i] ? Tr(L"PR\u00caT") : Tr(L"VIDE"))), -1, &status, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+				dc.DrawText(playing ? Tr(L"LECTURE") : (m_cacheReleased[i] ? (g_english.load()?L"FREE":L"LIBRE") : (m_cacheLoaded[i] ? Tr(L"PR\u00caT") : Tr(L"VIDE"))), -1, &status, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 			}
 			dc.SetTextColor(textColor);
 			const wchar_t * label = m_name[i].empty() ? Tr(L"Glisse un morceau ici") : m_name[i].c_str();
@@ -1155,6 +1168,7 @@ namespace {
                 dc.SetTextColor(accent);
                 dj_skin::icon(dc,L.analyse[k],k==0?dj_skin::Icon::pulse:k==1?dj_skin::Icon::keySearch:dj_skin::Icon::refresh);
             }
+            DrawControl(dc,L.release,RGB(8,10,14),accent);dj_skin::icon(dc,L.release,dj_skin::Icon::release);
             dc.SetTextColor(kText);
             // Boutons de zoom
 			DrawControl(dc, L.zoomOut, RGB(37, 45, 58), RGB(55, 66, 82));
@@ -1234,7 +1248,7 @@ namespace {
             dj_skin::surface(dc,shellA,DeckAccent(0),true);dj_skin::surface(dc,shellB,DeckAccent(1),true);
             CRect well=strip;well.DeflateRect(7,4);dj_skin::surface(dc,well,RGB(50,60,68));
 			const int left = FaderLeft(rc), right = FaderRight(rc);
-			const int cy = (strip.top + 32 + strip.bottom) / 2;
+			const int cy = (strip.top + strip.bottom) / 2;
 			const CRect both = PlayBothRect(rc);
 			const bool ready = m_cacheLoaded[0] && m_cacheLoaded[1];
 			DrawControl(dc, both, RGB(37,45,58), ready ? kMuted : RGB(55,66,82));
@@ -1243,8 +1257,8 @@ namespace {
 			const wchar_t * action = m_cachePlaying[0] && m_cachePlaying[1] ? L"II  Pause A + B" : (!m_cachePlaying[0] && !m_cachePlaying[1] ? Tr(L"\u25b6  Lancer A + B") : Tr(L"\u21c4  Inverser A / B"));
 			dj_skin::icon(dc,caption,m_cachePlaying[0]&&m_cachePlaying[1]?dj_skin::Icon::pause:(!m_cachePlaying[0]&&!m_cachePlaying[1]?dj_skin::Icon::both:dj_skin::Icon::swap));
 
-			CRect labelA(strip.left, strip.top + 32, left - 4, strip.bottom);
-			CRect labelB(right + 4, strip.top + 32, strip.right, strip.bottom);
+			CRect labelA(strip.left+68, strip.top, left - 4, strip.bottom);
+			CRect labelB(right + 4, strip.top, strip.right-68, strip.bottom);
 			dc.SetTextColor(DeckAccent(0));
 			dc.DrawText(L"A", -1, &labelA, DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 			dc.SetTextColor(DeckAccent(1));
@@ -1269,7 +1283,7 @@ namespace {
 				CRect button = LanguageRect(rc,lang != 0); const bool selected = g_english.load() == (lang != 0);
 				DrawControl(dc,button,selected ? RGB(42,56,70) : kSurface,selected ? kText : RGB(55,66,82));
 				dc.SetTextColor(selected ? kText : kMuted);
-				dc.DrawText(lang ? L"English" : L"Fran\u00e7ais",-1,&button,DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+				dc.DrawText(g_english.load()?L"EN \u25be":L"FR \u25be",-1,&button,DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 			}
 		}
 
@@ -1290,13 +1304,21 @@ namespace {
 		CRect rc;
 		GetClientRect(&rc);
 
-		for (int lang = 0; lang < 2; ++lang) if (LanguageRect(rc,lang != 0).PtInRect(point)) {
-			g_english = lang != 0; cfg_language = lang; Invalidate(); return;
-		}
+        m_pressedButton=HitButton(point,rc);
+        if(!m_pressedButton.IsRectEmpty()) {m_hotButton=m_pressedButton;SetCapture();Invalidate();UpdateWindow();}
+        if(LanguageRect(rc,false).PtInRect(point)) {
+            HMENU menu=CreatePopupMenu();
+            AppendMenuW(menu,MF_STRING|(!g_english.load()?MF_CHECKED:0),1,L"Fran\u00e7ais");
+            AppendMenuW(menu,MF_STRING|(g_english.load()?MF_CHECKED:0),2,L"English");
+            CPoint screen=point;ClientToScreen(&screen);
+            auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,screen.x,screen.y,0,m_hWnd,nullptr);DestroyMenu(menu);
+            if(choice==1 || choice==2){g_english=choice==2;cfg_language=choice==2;}
+            m_pressedButton.SetRectEmpty();::ReleaseCapture();Invalidate();return;
+        }
 		if (PlayBothRect(rc).PtInRect(point)) { PlayBoth(); Invalidate(); return; }
 
 		// Crossfader : on attrape le curseur
-		if (FaderStrip(rc).PtInRect(point)) {
+		if (CRect(FaderLeft(rc)-10,FaderStrip(rc).top,FaderRight(rc)+10,FaderStrip(rc).bottom).PtInRect(point)) {
 			m_drag = 1;
 			SetCapture();
 			SetFaderFromX(point.x, rc);
@@ -1306,7 +1328,8 @@ namespace {
 		for (int i = 0; i < 2; ++i) {
 			const DeckLayout L = MakeLayout(i, rc);
 
-			if (L.btn[0].PtInRect(point)) { TogglePlay(i); Invalidate(); return; }
+			if(L.release.PtInRect(point)) { if(!m_savedPath[i].empty()) ReleaseForTags(i); Invalidate();return; }
+            if (L.btn[0].PtInRect(point)) { TogglePlay(i); Invalidate(); return; }
 			if (L.btn[1].PtInRect(point)) { SeekDeck(i, 0.0); Invalidate(); return; }
 			if (L.zoomOut.PtInRect(point)) { ZoomDeck(i, false); return; }
 			if (L.zoomIn.PtInRect(point)) { ZoomDeck(i, true); return; }
@@ -1347,6 +1370,10 @@ namespace {
 	}
 
 	void CDjPanel::OnMouseMove(UINT nFlags, CPoint point) {
+        CRect client;GetClientRect(&client);
+        if(!m_trackingMouse) { TRACKMOUSEEVENT event={sizeof(event),TME_LEAVE,m_hWnd,0};::TrackMouseEvent(&event);m_trackingMouse=true; }
+        auto hot=HitButton(point,client);
+        if(hot!=m_hotButton) { m_hotButton=hot;Invalidate(); }
 		if (m_drag == 0) return;
 		if (!(nFlags & MK_LBUTTON)) {   // le bouton a ete relache ailleurs
 			m_drag = 0;
@@ -1360,6 +1387,7 @@ namespace {
 	}
 
 	void CDjPanel::OnLButtonUp(UINT nFlags, CPoint point) {
+        if(!m_pressedButton.IsRectEmpty()) { m_pressedButton.SetRectEmpty();::ReleaseCapture();Invalidate(); }
 		if (m_drag != 0) {
 			m_drag = 0;
 			::ReleaseCapture();
@@ -1370,7 +1398,7 @@ namespace {
 	void CDjPanel::OnRButtonDown(UINT nFlags, CPoint point) {
 		CRect rc;
 		GetClientRect(&rc);
-		if (FaderStrip(rc).PtInRect(point)) {
+		if (CRect(FaderLeft(rc)-10,FaderStrip(rc).top,FaderRight(rc)+10,FaderStrip(rc).bottom).PtInRect(point)) {
 			m_crossfade = 0.5f;
 			Invalidate();
 			return;
@@ -1494,7 +1522,7 @@ namespace {
                 std::lock_guard<std::mutex> waveLock(m_deck[i].wave->m);
                 m_waveNeedsRebuild[i] = m_waveNeedsRebuild[i] || !m_deck[i].wave->done;
             }
-            { std::lock_guard<std::mutex> lock(m_lock); ReleaseDeckReader(m_deck[i]); }
+            { std::lock_guard<std::mutex> lock(m_lock); ReleaseDeckReader(m_deck[i]); m_error[i].clear(); }
             StopWaveThread(i); // closes the waveform/artwork reader too
 
         }

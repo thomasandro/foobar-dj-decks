@@ -15,9 +15,9 @@ if ($first -lt 0 -or $last -lt $first) { throw 'Audio fixture extraction anchors
 $generated = '#include "../../tests/audio_fixture.h"' + "`n" + $source.Substring($first,$last-$first) + "`n" + '#include "../../tests/audio_cases.inc"' + "`n"
 [IO.File]::WriteAllText((Join-Path $output 'audio-generated.cpp'),$generated,[Text.UTF8Encoding]::new($false))
 $layoutFirst = $source.IndexOf('struct DeckLayout {')
-$layoutLast = $source.IndexOf('// Bande du crossfader', $layoutFirst)
+$layoutLast = $source.IndexOf('// Colonne du curseur', $layoutFirst)
 if ($layoutFirst -lt 0 -or $layoutLast -lt $layoutFirst) { throw 'Skin layout extraction anchors changed.' }
-$layout = 'static constexpr int kFaderHeight=86, kFooterHeight=26;' + "`n" + $source.Substring($layoutFirst,$layoutLast-$layoutFirst)
+$layout = 'static constexpr int kFaderHeight=52, kFooterHeight=0;' + "`n" + $source.Substring($layoutFirst,$layoutLast-$layoutFirst)
 [IO.File]::WriteAllText((Join-Path $output 'skin-layout.inc'),$layout,[Text.UTF8Encoding]::new($false))
 $prior = $env:DJ_DECKS_VCVARS
 try {

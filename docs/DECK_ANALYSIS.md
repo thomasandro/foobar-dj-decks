@@ -1,5 +1,11 @@
 # Deck analysis (development version)
 
+Since 0.18.0-dev, a separate square/arrow Stop/Release button is available beside
+the three analysis buttons. It pauses/releases DJ Decks readers of the same file,
+retains position, and shows FREE/LIBRE. Use it before tag changes made elsewhere.
+Press Play after the external operation finishes to reopen at the retained position.
+It does not close file handles held by other applications or unrelated components.
+
 Since 0.16.1-dev, starting analysis pauses and releases all DJ Decks readers of the
 same physical file, including waveform workers. After saving results (or cancelling
 the analyser), press Play to reopen at the retained position. Do not resume before
