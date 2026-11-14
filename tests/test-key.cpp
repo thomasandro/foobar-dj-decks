@@ -38,6 +38,23 @@ int main() {
     assert(dj_key::transpose(L"Am",1)==L"3A");
     assert(dj_key::transpose(L"C",-1)==L"1B");
     assert(dj_key::transpose(L"8A",12)==L"8A");
+    int shift=99;
+    assert(dj_key::match(L"Dm",L"Am",0,0,shift) && shift==-5);
+    assert(dj_key::match(L"Dm",L"C",0,0,shift) && shift==-5);
+    assert(dj_key::match(L"Am",L"Am",0,2,shift) && shift==2);
+    shift=99; assert(!dj_key::match(L"",L"Am",0,0,shift) && shift==99);
+    for(int a=1;a<=12;++a) for(int b=1;b<=12;++b) for(auto x:{L"A",L"B"}) for(auto y:{L"A",L"B"})
+      for(int current : {-12,-5,0,7,12}) for(int ref : {-12,0,5,12}) {
+        const auto own=std::to_wstring(a)+x, other=std::to_wstring(b)+y;
+        assert(dj_key::match(own,other,current,ref,shift));
+        const auto effective=dj_key::transpose(own,shift), target=dj_key::transpose(other,ref);
+        assert(effective.back()==own.back());
+        assert(std::stoi(effective)==std::stoi(target));
+        assert(shift>=-12 && shift<=12);
+        assert(dj_key::compatibility(effective,target)==C::usual);
+        for(int alternative=-12;alternative<=12;++alternative)
+          if(dj_key::transpose(own,alternative)==effective) assert(std::abs(shift-current)<=std::abs(alternative-current));
+      }
     for(int n=-12;n<=12;++n) for(int k=1;k<=12;++k) {
         auto key=std::to_wstring(k)+L"A";
         assert(dj_key::transpose(dj_key::transpose(key,n),-n)==key);

@@ -26,6 +26,8 @@
 #include "musical_key.h"
 #include "beat_sync.h"
 #include "dj_language.h"
+#include "dj_skin.h"
+#include <commctrl.h>
 #include "third_party/soundtouch/include/SoundTouch.h"
 
 #pragma comment(lib, "ole32.lib")
@@ -64,7 +66,7 @@ namespace {
 	static constexpr unsigned kPeaksPerSecond = 100;     // precision de la forme d'onde : 100 valeurs par seconde
 	static constexpr int kFaderHeight = 86;              // place reservee au crossfader, en bas de la fenetre
 	static constexpr int kFooterHeight = 26;             // place reservee au numero de version, tout en bas
-	static COLORREF DeckAccent(int deck) { return deck == 0 ? RGB(65, 211, 230) : RGB(255, 167, 75); }
+	static COLORREF DeckAccent(int deck) { return deck == 0 ? RGB(0, 194, 211) : RGB(245, 143, 27); }
 	static constexpr COLORREF kCanvas = RGB(16, 19, 25);
 	static constexpr COLORREF kSurface = RGB(25, 30, 39);
 	static constexpr COLORREF kText = RGB(231, 237, 245);
@@ -75,8 +77,9 @@ namespace {
 	}
 	static void DrawControl(CDCHandle dc, const CRect & rect, COLORREF fill, COLORREF edge) {
 		if (rect.Width() <= 0 || rect.Height() <= 0) return;
-		FillBox(dc, rect, fill);
-		CBrush border; border.CreateSolidBrush(edge); dc.FrameRect(&rect, border);
+        if(rect.Width()<16 || rect.Height()<16) {
+            FillBox(dc,rect,fill); CBrush border; border.CreateSolidBrush(edge); dc.FrameRect(&rect,border);
+        } else dj_skin::surface(dc,rect,edge);
 	}
 
 	// Forme d'onde d'un fichier : une valeur (le pic le plus haut) toutes les 10 ms.
@@ -191,6 +194,12 @@ namespace {
 		}
 		DrainStretch(d);
 	}
+    static void ReleaseDeckReader(Deck& d) {
+        d.playing=false; d.helper.reset();
+        d.src.clear(); d.srcPos=0; d.pending.clear(); d.pendingPos=0;
+        d.stretch.reset(); d.stretchFlushed=false;
+        // Preserve loaded state, tags, waveform and audible position for explicit resume.
+    }
 	static void FillDeck(Deck & d, size_t wantFrames, unsigned outRate, abort_callback & abort, double speed, bool fixedPitch, int semitones = 0) {
 		if (!d.stretch) {
 			d.stretch = std::make_shared<soundtouch::SoundTouch>();
@@ -313,6 +322,7 @@ namespace {
 		CRect title;      // "DECK A"
 		CRect gridControl[4];
         CRect pitch[3];
+        CRect matchKey;
         CRect analyse[3];
 		CRect beat;
 		CRect key;
@@ -349,32 +359,25 @@ namespace {
 		L.zoomOut = CRect(right - 48, d.top + 92, right - 26, d.top + 114);
 		L.zoomIn = CRect(right - 24, d.top + 92, right, d.top + 114);
 
-		for(int k=0;k<3;++k) {
-            const int cell=(right-left-6)/3;
-            L.analyse[k]=CRect(left+k*(cell+3),d.top+120,left+k*(cell+3)+cell,d.top+144);
-        }
-        const int waveTop = d.top + 150, waveBottom = d.bottom - 178;
-		L.wave = CRect(left, waveTop, right - 46, waveBottom);
-		L.vol = CRect(right - 38, waveTop, right, waveBottom);
-		for (int i = 0; i < 4; ++i) {
-			const int cell = (right-left-9)/4;
-			L.gridControl[i] = CRect(left+i*(cell+3),d.bottom-172,left+i*(cell+3)+cell,d.bottom-148);
-		}
-        L.pitch[0]=CRect(left,d.bottom-142,left+30,d.bottom-118);
-        L.pitch[1]=CRect(left+34,d.bottom-142,right-34,d.bottom-118);
-        L.pitch[2]=CRect(right-30,d.bottom-142,right,d.bottom-118);
-		L.key = CRect(left, d.bottom - 112, right - 92, d.bottom - 88);
-		L.beat = CRect(right - 86, L.key.top, right, L.key.bottom);
-		L.speed = CRect(left, d.bottom - 82, right, d.bottom - 48);
-		L.sync = CRect(right - 86, L.speed.top, right, L.speed.top + 20);
-        L.range=CRect(left,L.speed.top,left+64,L.speed.top+20);
+        // Compact, raised hardware-like controls; the waveform keeps most of the space.
+        for(int k=0;k<3;++k) L.analyse[k]=CRect(left+k*64,d.top+122,left+k*64+56,d.top+164);
+        const int waveTop=d.top+172,waveBottom=d.bottom-164;
+        L.wave=CRect(left,waveTop,right-46,waveBottom);
+        L.vol=CRect(right-38,waveTop,right,waveBottom);
+        const int row=d.bottom-154;
+        for(int k=0;k<4;++k) L.gridControl[k]=CRect(left+k*36,row,left+k*36+32,row+36);
+        L.pitch[0]=CRect(left+148,row,left+176,row+36);
+        L.pitch[1]=CRect(left+180,row,right-124,row+36);
+        L.pitch[2]=CRect(right-120,row,right-92,row+36);
+        L.matchKey=CRect(right-84,row,right-48,row+36);
+        L.key=CRect(right-40,row,right,row+36);
+        L.speed=CRect(left,d.bottom-108,right,d.bottom-56);
+        L.range=CRect(left,L.speed.top,left+64,L.speed.top+32);
+        L.beat=CRect(right-76,L.speed.top,right-40,L.speed.top+32);
+        L.sync=CRect(right-36,L.speed.top,right,L.speed.top+32);
+        const int gap=8, w=(right-left-gap)/2;
+        for(int k=0;k<2;++k) L.btn[k]=CRect(left+k*(w+gap),d.bottom-48,left+k*(w+gap)+w,d.bottom-6);
 
-		const int gap = 6;
-		const int w = (right - left - gap) / 2;
-		const int top = d.bottom - 42, bottom = d.bottom - 8;
-		for (int i = 0; i < 2; ++i) {
-			L.btn[i] = CRect(left + i * (w + gap), top, left + i * (w + gap) + w, bottom);
-		}
 		return L;
 	}
 
@@ -425,6 +428,7 @@ namespace {
 
 		BEGIN_MSG_MAP_EX(CDjPanel)
 			MESSAGE_HANDLER(kRestoreMessage, OnRestoreSession)
+            MESSAGE_HANDLER(WM_NOTIFY, OnTooltipNotify)
             MESSAGE_HANDLER(WM_APP + 173, OnMetadataRefresh)
 			MSG_WM_LBUTTONDOWN(OnLButtonDown)
 			MSG_WM_LBUTTONUP(OnLButtonUp)
@@ -465,8 +469,11 @@ namespace {
         }
     private:
         LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); return 0; }
-        void RefreshDeckTags(int deck);
+        void RefreshDeckTags(int deck, bool readFile = false);
+        void ReleaseForTags(int deck);
+        bool ReopenAfterTags(int deck);
         void AnalyseDeck(int deck,int action);
+        void MatchKey(int deck);
 		static constexpr UINT_PTR kTimerId = 1;
 		static constexpr size_t kBlockFrames = 1024;   // taille d'un bloc de son envoye a la sortie
 
@@ -476,6 +483,21 @@ namespace {
 		void OnMouseMove(UINT nFlags, CPoint point);
 		BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 		void OnPaint(CDCHandle);
+        struct Tip { CRect rect; std::wstring text; };
+        HWND m_tooltip=nullptr;
+        CRect m_tipClient={0,0,0,0};
+        bool m_tipEnglish=false;
+        std::vector<Tip> m_tips;
+        void UpdateTooltips(const CRect& client);
+        LRESULT OnTooltipNotify(UINT,WPARAM,LPARAM value,BOOL& handled) {
+            auto hdr=reinterpret_cast<NMHDR*>(value);
+            if(hdr && hdr->hwndFrom==m_tooltip && hdr->code==TTN_GETDISPINFOW) {
+                auto info=reinterpret_cast<NMTTDISPINFOW*>(value);
+                if(hdr->idFrom>0 && hdr->idFrom<=m_tips.size()) info->lpszText=const_cast<wchar_t*>(m_tips[hdr->idFrom-1].text.c_str());
+                return 0;
+            }
+            handled=FALSE; return 0;
+        }
 		void PaintAll(CDCHandle dc, const CRect & rc);
 		BOOL OnEraseBkgnd(CDCHandle);
 		// On ne redessine vite que si quelque chose bouge (lecture, curseur deplace) ; au repos, 4 fois par seconde.
@@ -539,6 +561,8 @@ namespace {
         std::wstring m_cacheKey[2];
 		bool m_cachePlaying[2] = { false, false };
 		bool m_cacheLoaded[2] = { false, false };
+        bool m_cacheReleased[2] = {};
+        bool m_waveNeedsRebuild[2] = {};
 		double m_cacheLength[2] = { 0.0, 0.0 };
 		double m_cacheBpm[2] = {};
 		dj_beats::Grid m_grid[2];
@@ -606,6 +630,7 @@ namespace {
 	}
 
 	void CDjPanel::OnDestroy() {
+        if(m_tooltip) { ::DestroyWindow(m_tooltip); m_tooltip=nullptr; }
 		KillTimer(kTimerId);
 		RevokeDrop();          // la fenetre n'accepte plus de depots
 		StopEngine();          // arrete proprement le moteur avant que la fenetre disparaisse
@@ -673,6 +698,7 @@ namespace {
 		{
 			std::lock_guard<std::mutex> lock(m_lock);
 			Deck & own = m_deck[deck]; const Deck & ref = m_deck[1-deck];
+            if((own.loaded && !own.helper) || (ref.loaded && !ref.helper)) { m_error[deck]=g_english.load()?L"Finish analysis, then press Play":L"Terminez l'analyse puis cliquez Lecture"; return; }
 			if (!own.loaded || !ref.loaded || !own.wave || !ref.wave) { m_error[deck] = L"Charge les deux platines"; return; }
 			double speed = m_speed[deck].load();
 			const auto match = dj_tempo::match(own.bpmValue, ref.bpmValue, m_speed[1-deck].load(), speed, m_speedRange[deck].load());
@@ -923,7 +949,58 @@ namespace {
 		mem.SelectBitmap(oldBitmap);
 	}
 
+    void CDjPanel::UpdateTooltips(const CRect& client) {
+        const bool en=g_english.load();
+        if(m_tooltip && client==m_tipClient && en==m_tipEnglish) return;
+        if(!m_tooltip) {
+            m_tooltip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,
+                CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,m_hWnd,nullptr,core_api::get_my_instance(),nullptr);
+            if(!m_tooltip) return;
+            SendMessageW(m_tooltip,TTM_SETMAXTIPWIDTH,0,420);
+            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_INITIAL,450);
+            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_AUTOPOP,14000);
+        }
+        for(size_t n=0;n<m_tips.size();++n) { TOOLINFOW ti={sizeof(ti)}; ti.hwnd=m_hWnd;ti.uId=n+1;SendMessageW(m_tooltip,TTM_DELTOOLW,0,(LPARAM)&ti); }
+        m_tips.clear(); m_tipClient=client;m_tipEnglish=en;
+        auto add=[&](CRect r,const wchar_t* fr,const wchar_t* english){if(r.Width()>0 && r.Height()>0)m_tips.push_back({r,en?english:fr});};
+        for(int i=0;i<2;++i) {
+            const auto L=MakeLayout(i,client);
+            add(L.analyse[0],L"Calculer le BPM avec foo_bpm. La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using foo_bpm. Pauses and releases the file for tag writing. Resume after saving the result.");
+            add(L.analyse[1],L"Calculer la tonalit\u00e9 avec foo_musical_key. Reprendre la lecture apr\u00e8s la fin de l'analyse et l'enregistrement des tags.",L"Calculate key using foo_musical_key. Resume after analysis and tag writing have finished.");
+            add(L.analyse[2],L"Actualiser les tags : relire le BPM et la tonalit\u00e9 et afficher les valeurs. Ne lance pas d'analyse audio.",L"Refresh tags: read BPM and key and show their values. Does not analyse audio.");
+            add(L.gridControl[0],L"D\u00e9caler la grille de -10 ms. Maj : -1 ms.",L"Shift beat grid -10 ms. Shift: -1 ms.");
+            add(L.gridControl[1],L"Temps ici : ancrer un battement sur la position actuelle.",L"Beat here: anchor the grid at the current position.");
+            add(L.gridControl[2],L"D\u00e9caler la grille de +10 ms. Maj : +1 ms.",L"Shift beat grid +10 ms. Shift: +1 ms.");
+            add(L.gridControl[3],L"Grille automatique : supprimer le r\u00e9glage manuel du morceau.",L"Automatic grid: remove this track's manual override.");
+            add(L.pitch[0],L"Baisser la tonalit\u00e9 d'un demi-ton, sans changer le tempo.",L"Transpose down one semitone without changing tempo.");
+            add(L.pitch[1],L"Transposition actuelle. Cliquer pour revenir \u00e0 z\u00e9ro.",L"Current transposition. Click to reset to zero.");
+            add(L.pitch[2],L"Monter la tonalit\u00e9 d'un demi-ton, sans changer le tempo.",L"Transpose up one semitone without changing tempo.");
+            add(L.matchKey,i==0?L"Caler la tonalit\u00e9 sur B sans changer le tempo. M\u00eame tonalit\u00e9, ou relative compatible si les modes diff\u00e8rent.":L"Caler la tonalit\u00e9 sur A sans changer le tempo. M\u00eame tonalit\u00e9, ou relative compatible si les modes diff\u00e8rent.",i==0?L"Match key to B without changing tempo. Same key, or relative compatible key for opposite modes.":L"Match key to A without changing tempo. Same key, or relative compatible key for opposite modes.");
+            add(L.key,L"Tonalit\u00e9 fixe / mode vinyle. Cadenas ferm\u00e9 : changer le tempo en conservant la hauteur.",L"Key lock / vinyl mode. Closed lock: tempo changes preserve pitch.");
+            add(L.beat,i==0?L"SYNC vers B : caler BPM et phase des battements. Calage ponctuel exp\u00e9rimental.":L"SYNC vers A : caler BPM et phase des battements. Calage ponctuel exp\u00e9rimental.",i==0?L"SYNC to B: match BPM and beat phase. Experimental one-shot alignment.":L"SYNC to A: match BPM and beat phase. Experimental one-shot alignment.");
+            add(L.sync,i==0?L"Caler uniquement le BPM sur B, dans la plage choisie.":L"Caler uniquement le BPM sur A, dans la plage choisie.",i==0?L"Match BPM only to B, within the selected range.":L"Match BPM only to A, within the selected range.");
+            add(L.range,L"Choisir la plage de vitesse : +/-8 %, +/-16 % ou +/-50 %.",L"Choose speed range: +/-8%, +/-16% or +/-50%.");
+            CRect slider=L.speed;slider.top+=34;
+            add(slider,L"Vitesse : glisser ou molette. Maj : r\u00e9glage fin. Clic droit : vitesse normale.",L"Speed: drag or wheel. Shift: fine adjustment. Right-click: normal speed.");
+            add(L.zoomOut,L"R\u00e9duire le zoom de la forme d'onde.",L"Zoom waveform out.");
+            add(L.zoomIn,L"Agrandir la forme d'onde.",L"Zoom waveform in.");
+            add(L.vol,L"Volume de cette platine.",L"Volume for this deck.");
+            add(L.btn[0],L"Lecture / pause. Apr\u00e8s une analyse, rouvrir le fichier \u00e0 la position conserv\u00e9e.",L"Play / pause. After analysis, reopen the file at the retained position.");
+            add(L.btn[1],L"Retour au d\u00e9but du morceau.",L"Return to the beginning of the track.");
+        }
+        add(PlayBothRect(client),L"Inverser les deux \u00e9tats : lecture ensemble, pause ensemble ou \u00e9change de la platine en lecture.",L"Toggle both states: play together, pause together or swap the playing deck.");
+        CRect fader=FaderStrip(client);fader.top+=32;
+        add(fader,L"Crossfader : doser les platines A et B.",L"Crossfader: blend decks A and B.");
+        add(LanguageRect(client,false),L"Interface et infobulles en fran\u00e7ais.",L"French interface and tooltips.");
+        add(LanguageRect(client,true),L"Interface et infobulles en anglais.",L"English interface and tooltips.");
+        for(size_t n=0;n<m_tips.size();++n) {
+            TOOLINFOW ti={sizeof(ti)};ti.uFlags=TTF_SUBCLASS;ti.hwnd=m_hWnd;ti.uId=n+1;ti.rect=m_tips[n].rect;ti.lpszText=LPSTR_TEXTCALLBACKW;
+            SendMessageW(m_tooltip,TTM_ADDTOOLW,0,(LPARAM)&ti);
+        }
+    }
+
 	void CDjPanel::PaintAll(CDCHandle dc, const CRect & rc) {
+        UpdateTooltips(rc);
 		const COLORREF textColor = kText;
 		const COLORREF bgColor = kCanvas;
 		dc.SetTextColor(textColor);
@@ -951,6 +1028,7 @@ namespace {
                     for (int k=0;k<2;++k) m_cacheKey[k] = m_deck[k].loaded ? m_deck[k].musicalKey : L"";
 					m_cachePlaying[i] = dk.playing;
 					m_cacheLoaded[i] = dk.loaded;
+                    m_cacheReleased[i] = dk.loaded && !dk.helper;
 					m_cacheLength[i] = dk.length;
 					m_cacheBpm[i] = dk.bpmValue;
 					m_trueElapsed[i] = m_outRate ? (double)dk.framesPlayed / (double)m_outRate : 0.0;
@@ -1001,9 +1079,10 @@ namespace {
 
 			DeckLayout L = MakeLayout(i, rc);
 			const COLORREF accent = DeckAccent(i);
-			FillBox(dc, L.deck, kSurface);
-			dc.FrameRect(&L.deck, frame);
-			FillBox(dc, CRect(L.deck.left + 1, L.deck.top + 1, L.deck.right - 1, L.deck.top + 4), accent);
+            dj_skin::surface(dc,L.deck,accent,true);
+            CRect display(L.deck.left+8,L.deck.top+7,L.deck.right-8,L.deck.top+117);
+            dj_skin::surface(dc,display,RGB(50,60,68));
+            DrawControl(dc,L.vol,RGB(8,10,14),RGB(65,72,82));
 			if (m_dropHover == i) {      // un morceau est glisse au-dessus de ce deck : cadre rouge epais
 				CBrush hot;
 				hot.CreateSolidBrush(accent);
@@ -1028,7 +1107,7 @@ namespace {
 				dc.SetTextColor(accent);
 				dc.DrawText(titles[i], -1, &L.title, DT_NOPREFIX | DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 				CRect status = L.title; status.left = (std::max)(L.title.left + 64, status.right - 60);
-				dc.DrawText(playing ? Tr(L"LECTURE") : (m_cacheLoaded[i] ? Tr(L"PR\u00caT") : Tr(L"VIDE")), -1, &status, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+				dc.DrawText(playing ? Tr(L"LECTURE") : (m_cacheReleased[i] ? (g_english.load()?L"TAGS":L"TAGS") : (m_cacheLoaded[i] ? Tr(L"PR\u00caT") : Tr(L"VIDE"))), -1, &status, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 			}
 			dc.SetTextColor(textColor);
 			const wchar_t * label = m_name[i].empty() ? Tr(L"Glisse un morceau ici") : m_name[i].c_str();
@@ -1062,21 +1141,21 @@ namespace {
 
 			// Semitone transposition is independent of tempo; centre resets to zero.
             for(int k=0;k<3;++k) DrawControl(dc,L.pitch[k],RGB(37,45,58),accent);
-            dc.SetTextColor(accent);
+            dc.SetTextColor(kText);
             dc.DrawText(L"-",-1,&L.pitch[0],DT_CENTER|DT_VCENTER|DT_SINGLELINE);
             dc.DrawText(L"+",-1,&L.pitch[2],DT_CENTER|DT_VCENTER|DT_SINGLELINE);
             wchar_t pitchLabel[80];
-            swprintf_s(pitchLabel,g_english.load()?L"Transpose: %+d st (reset)":L"Transposition : %+d demi-tons (0)",m_transpose[i].load());
+            swprintf_s(pitchLabel,g_english.load()?L"%+d st":L"%+d demi-tons",m_transpose[i].load());
             dc.DrawText(pitchLabel,-1,&L.pitch[1],DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+            DrawControl(dc,L.matchKey,RGB(37,45,58),accent);
+            dj_skin::icon(dc,L.matchKey,dj_skin::Icon::keyMatch);
             dc.SetTextColor(kMuted);
             for(int k=0;k<3;++k) {
                 DrawControl(dc,L.analyse[k],RGB(37,45,58),accent);
                 dc.SetTextColor(accent);
-                const wchar_t* text=g_english.load() ? (k==0?L"Calculate BPM":k==1?L"Calculate key":L"Refresh tags")
-                    : (k==0?L"Calculer BPM":k==1?L"Calculer tonalit\u00e9":L"Actualiser tags");
-                dc.DrawText(text,-1,&L.analyse[k],DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+                dj_skin::icon(dc,L.analyse[k],k==0?dj_skin::Icon::pulse:k==1?dj_skin::Icon::keySearch:dj_skin::Icon::refresh);
             }
-            dc.SetTextColor(kMuted);
+            dc.SetTextColor(kText);
             // Boutons de zoom
 			DrawControl(dc, L.zoomOut, RGB(37, 45, 58), RGB(55, 66, 82));
 			dc.DrawText(L"-", -1, &L.zoomOut, DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -1089,7 +1168,7 @@ namespace {
 			// Curseur de volume : un mot "VOL", une glissiere verticale et un curseur
 			{
 				CRect volLabel(L.vol.left, L.vol.top, L.vol.right, L.vol.top + 18);
-				dc.DrawText(L"VOL", -1, &volLabel, DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				dj_skin::icon(dc,volLabel,dj_skin::Icon::speaker);
 				const int top = VolTrackTop(L), bottom = VolTrackBottom(L);
 				const int cx = (L.vol.left + L.vol.right) / 2;
 				if (bottom > top) {
@@ -1107,25 +1186,25 @@ namespace {
 			for (int control = 0; control < 4; ++control) {
 				DrawControl(dc,L.gridControl[control],RGB(37,45,58),m_manualGrid[i] ? accent : kMuted);
 				dc.SetTextColor(m_manualGrid[i] ? accent : kMuted);
-				dc.DrawText(gridLabels[control],-1,&L.gridControl[control],DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+				dj_skin::icon(dc,L.gridControl[control],control==0?dj_skin::Icon::left:control==1?dj_skin::Icon::anchor:control==2?dj_skin::Icon::right:dj_skin::Icon::automatic);
 			}
 			DrawControl(dc, L.key, m_fixedPitch[i] ? Blend(accent, kSurface, 0.84) : RGB(37,45,58), m_fixedPitch[i] ? accent : kMuted);
 			dc.SetTextColor(m_fixedPitch[i] ? accent : kMuted);
-			dc.DrawText(m_fixedPitch[i] ? Tr(L"Tonalit\u00e9 fixe : OUI") : Tr(L"Mode vinyle"), -1, &L.key, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			dj_skin::icon(dc,L.key,m_fixedPitch[i]?dj_skin::Icon::lock:dj_skin::Icon::unlock,m_fixedPitch[i]?accent:kText);
 
 			DrawControl(dc, L.beat, Blend(accent, kSurface, 0.84), accent);
 			dc.SetTextColor(accent);
-			dc.DrawText(i == 0 ? L"SYNC = B" : L"SYNC = A", -1, &L.beat, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			dj_skin::icon(dc,L.beat,dj_skin::Icon::beat);
 
 			wchar_t rangeLabel[32]; swprintf_s(rangeLabel,L"\u00b1%d %%",m_speedRange[i].load());
             DrawControl(dc,L.range,RGB(37,45,58),accent);
-            dc.SetTextColor(accent); dc.DrawText(rangeLabel,-1,&L.range,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            dc.SetTextColor(kText); dc.DrawText(rangeLabel,-1,&L.range,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
             // Per-deck speed slider, neutral in the centre.
 			{
 				const auto area = L.speed; const double speed = m_speed[i].load();
 				wchar_t label[64]; swprintf_s(label, Tr(L"Vitesse  %+.1f %%"), (speed-1.0)*100.0);
-				CRect caption(L.range.right+4, area.top, L.sync.left - 5, area.top+16);
-				dc.SetTextColor(kMuted); dc.DrawText(label, -1, &caption, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				CRect caption(L.range.right+4, area.top, L.beat.left - 5, area.top+28);
+				DrawControl(dc,caption,RGB(8,10,14),RGB(65,72,82)); dc.SetTextColor(kText); dc.DrawText(label, -1, &caption, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 				const int left = area.left+10, right = area.right-10, y = area.bottom-8;
 				if (right > left) {
 					FillBox(dc, CRect(left,y-1,right,y+1), RGB(55,66,82));
@@ -1137,21 +1216,23 @@ namespace {
 
 			DrawControl(dc, L.sync, Blend(accent, kSurface, 0.84), Blend(accent, kSurface, 0.35));
 			dc.SetTextColor(accent);
-			dc.DrawText(i == 0 ? L"BPM = B" : L"BPM = A", -1, &L.sync, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			dj_skin::icon(dc,L.sync,dj_skin::Icon::bpm);
 
 			// Boutons du bas
 			DrawControl(dc, L.btn[0], playing ? accent : Blend(accent, kSurface, 0.83), accent);
 			dc.SetTextColor(playing ? kCanvas : accent);
-			dc.DrawText(playing ? L"II   PAUSE" : Tr(L"\u25b6   LECTURE"), -1, &L.btn[0], DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			dj_skin::icon(dc,L.btn[0],playing?dj_skin::Icon::pause:dj_skin::Icon::play,playing?accent:kText);
 			DrawControl(dc, L.btn[1], RGB(37, 45, 58), RGB(55, 66, 82));
 			dc.SetTextColor(kText);
-			dc.DrawText(Tr(L"D\u00e9but"), -1, &L.btn[1], DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			dj_skin::icon(dc,L.btn[1],dj_skin::Icon::start);
 		}
 
 		// Crossfader, en bas : une glissiere, un trait au milieu et un curseur.
 		{
 			const CRect strip = FaderStrip(rc);
-			FillBox(dc, strip, kSurface);
+			CRect shellA=strip,shellB=strip;shellA.right=(strip.left+strip.right)/2;shellB.left=shellA.right;
+            dj_skin::surface(dc,shellA,DeckAccent(0),true);dj_skin::surface(dc,shellB,DeckAccent(1),true);
+            CRect well=strip;well.DeflateRect(7,4);dj_skin::surface(dc,well,RGB(50,60,68));
 			const int left = FaderLeft(rc), right = FaderRight(rc);
 			const int cy = (strip.top + 32 + strip.bottom) / 2;
 			const CRect both = PlayBothRect(rc);
@@ -1160,7 +1241,7 @@ namespace {
 			dc.SetTextColor(ready ? kText : kMuted);
 			CRect caption = both;
 			const wchar_t * action = m_cachePlaying[0] && m_cachePlaying[1] ? L"II  Pause A + B" : (!m_cachePlaying[0] && !m_cachePlaying[1] ? Tr(L"\u25b6  Lancer A + B") : Tr(L"\u21c4  Inverser A / B"));
-			dc.DrawText(action, -1, &caption, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			dj_skin::icon(dc,caption,m_cachePlaying[0]&&m_cachePlaying[1]?dj_skin::Icon::pause:(!m_cachePlaying[0]&&!m_cachePlaying[1]?dj_skin::Icon::both:dj_skin::Icon::swap));
 
 			CRect labelA(strip.left, strip.top + 32, left - 4, strip.bottom);
 			CRect labelB(right + 4, strip.top + 32, strip.right, strip.bottom);
@@ -1233,6 +1314,7 @@ namespace {
 			for (int control = 0; control < 4; ++control) if (L.gridControl[control].PtInRect(point)) { EditGrid(i,control); Invalidate(); return; }
 			if (L.beat.PtInRect(point)) { SyncBeats(i); Invalidate(); return; }
 			for(int k=0;k<3;++k) if(L.analyse[k].PtInRect(point)) { AnalyseDeck(i,k); return; }
+            if(L.matchKey.PtInRect(point)) { MatchKey(i); return; }
             for(int k=0;k<3;++k) if(L.pitch[k].PtInRect(point)) {
                 m_transpose[i]=k==1?0:(std::max)(-12,(std::min)(12,m_transpose[i].load()+(k==0?-1:1)));
                 SaveSession(); Invalidate(); return;
@@ -1338,18 +1420,31 @@ namespace {
 	// Ouvre un morceau (adresse foobar2000 + numero de sous-piste) avec le decodeur de foobar2000,
 	// lit sa duree et decode un premier bloc (qui sert aussi a connaitre le format). Le deck est
 	// ensuite pret a jouer, et la forme d'onde se calcule en arriere-plan.
-    void CDjPanel::RefreshDeckTags(int deck) {
+    void CDjPanel::RefreshDeckTags(int deck, bool readFile) {
         if(m_savedPath[deck].empty()) return;
         auto handle=metadb::get()->handle_create(m_savedPath[deck].c_str(),m_savedSubsong[deck]);
         file_info_impl info;
-        if(!handle->get_info(info)) return;
+        const bool haveDatabase=handle->get_info(info);
+        file_info_impl diskInfo;
+        bool haveDisk=false;
+        if(readFile) {
+            try { abort_callback_dummy abort; input_helper::g_get_info(handle->get_location(),diskInfo,abort); haveDisk=true; }
+            catch(const std::exception& e) { popup_message::g_show(e.what(),"DJ Decks - tags"); return; }
+        }
+        if(!haveDatabase && !haveDisk) {
+            if(readFile) popup_message::g_show("No metadata available.","DJ Decks");
+            return;
+        }
         std::wstring key,bpmText; double bpm=0;
         for(const char* field:{"INITIALKEY","INITIAL KEY","KEY"}) {
             auto tag=info.meta_get(field,0);
+            if((!tag || !*tag) && haveDisk) tag=diskInfo.meta_get(field,0);
             if(tag) key=dj_key::display(pfc::stringcvt::string_wide_from_utf8(tag).get_ptr());
             if(!key.empty()) break;
         }
-        auto tag=info.meta_get("BPM",0);
+        auto tag=haveDisk?diskInfo.meta_get("BPM",0):nullptr;
+        if((!tag || !*tag) && haveDisk) tag=diskInfo.meta_get("TEMPO",0);
+        if(!tag || !*tag) tag=info.meta_get("BPM",0);
         if(!tag || !*tag) tag=info.meta_get("TEMPO",0);
         if(tag) {
             std::string value=tag;
@@ -1361,19 +1456,99 @@ namespace {
         { std::lock_guard<std::mutex> lock(m_lock);
           if(!m_deck[deck].loaded) return;
           m_deck[deck].musicalKey=key; m_deck[deck].bpm=bpmText; m_deck[deck].bpmValue=bpm;
+          if(readFile) m_error[deck].clear();
         }
         m_gridStamp[deck]=0; Invalidate();
+        if(readFile) {
+            wchar_t values[256];
+            const auto keyLabel=dj_key::label(key);
+            swprintf_s(values,g_english.load()?L"Tags read.\nTagged BPM: %.2f\nEffective BPM (speed applied): %.2f\nKey: %s\n\nThis button reads tags; it does not analyse audio.":L"Tags relus.\nBPM du tag : %.2f\nBPM effectif (vitesse appliqu\u00e9e) : %.2f\nTonalit\u00e9 : %s\n\nCe bouton relit les tags ; il ne calcule pas le BPM.",bpm,bpm*m_speed[deck].load(),keyLabel.empty()?L"?":keyLabel.c_str());
+            MessageBoxW(values,L"DJ Decks",MB_OK|MB_ICONINFORMATION);
+        }
     }
+    void CDjPanel::MatchKey(int deck) {
+        const wchar_t* error=nullptr;
+        { std::lock_guard<std::mutex> lock(m_lock);
+          if(!m_deck[deck].loaded || !m_deck[1-deck].loaded)
+            error=g_english.load()?L"Load both decks first.":L"Chargez les deux platines.";
+          else if((!m_fixedPitch[0].load() && std::abs(m_speed[0].load()-1)>0.000001)
+               || (!m_fixedPitch[1].load() && std::abs(m_speed[1].load()-1)>0.000001))
+            error=g_english.load()?L"Enable key lock on decks with non-neutral vinyl speed first.":L"Activez la tonalit\u00e9 fixe sur les platines dont la vitesse vinyle n'est pas neutre.";
+          else {
+            int shift=0;
+            if(dj_key::match(m_deck[deck].musicalKey,m_deck[1-deck].musicalKey,m_transpose[deck].load(),m_transpose[1-deck].load(),shift))
+                m_transpose[deck]=shift;
+            else error=g_english.load()?L"Two recognized musical key tags are required.":L"Deux tags de tonalit\u00e9 reconnus sont requis.";
+          }
+        }
+        if(error) { MessageBoxW(error,L"DJ Decks",MB_OK|MB_ICONINFORMATION); return; }
+        SaveSession(); Invalidate();
+    }
+
+    // The external analysis command is asynchronous and has no shared completion API.
+    // Keep all readers of this physical file released until the user explicitly plays.
+    void CDjPanel::ReleaseForTags(int deck) {
+        const auto path=m_savedPath[deck];
+        for(int i=0;i<2;++i) if(playable_location::path_compare(path.c_str(),m_savedPath[i].c_str())==0) {
+            if(m_deck[i].wave) {
+                std::lock_guard<std::mutex> waveLock(m_deck[i].wave->m);
+                m_waveNeedsRebuild[i] = m_waveNeedsRebuild[i] || !m_deck[i].wave->done;
+            }
+            { std::lock_guard<std::mutex> lock(m_lock); ReleaseDeckReader(m_deck[i]); }
+            StopWaveThread(i); // closes the waveform/artwork reader too
+
+        }
+        SaveSession(); Invalidate();
+    }
+    bool CDjPanel::ReopenAfterTags(int deck) {
+        { std::lock_guard<std::mutex> lock(m_lock);
+          if(!m_deck[deck].loaded || m_deck[deck].helper) return true;
+        }
+        try {
+            abort_callback_dummy abort;
+            auto helper=std::make_shared<input_helper>();
+            auto location=make_playable_location(m_savedPath[deck].c_str(),m_savedSubsong[deck]);
+            helper->open(service_ptr_t<file>(),location,input_flag_no_looping,abort);
+            double position=0;
+            { std::lock_guard<std::mutex> lock(m_lock); position=m_outRate?m_deck[deck].framesPlayed/m_outRate:0; }
+            if(position>0) {
+                if(!helper->can_seek()) throw pfc::exception("Cannot restore position after tag analysis");
+                helper->seek(position,abort);
+            }
+            { std::lock_guard<std::mutex> lock(m_lock);
+              auto& d=m_deck[deck]; d.helper=helper; d.eof=false;
+              d.src.clear(); d.srcPos=0; d.pending.clear(); d.pendingPos=0;
+              d.stretch.reset(); d.stretchFlushed=false; m_error[deck].clear();
+            }
+            RefreshDeckTags(deck);
+            // If waveform analysis was interrupted, rebuild it only after explicit resume.
+            if(m_waveNeedsRebuild[deck]) {
+                auto wave=std::make_shared<Waveform>();
+                { std::lock_guard<std::mutex> lock(m_lock); m_deck[deck].wave=wave; }
+                m_waveNeedsRebuild[deck]=false; m_waveCur[deck]=wave;
+                m_waveThread[deck]=std::thread(AnalyzeWaveform,m_savedPath[deck],m_savedSubsong[deck],wave);
+            }
+            return true;
+        } catch(const std::exception& e) {
+            popup_message::g_show(e.what(),"DJ Decks - finish tag writing before resuming"); return false;
+        }
+    }
+
     void CDjPanel::AnalyseDeck(int deck,int action) {
         if(m_savedPath[deck].empty()) {
             popup_message::g_show(g_english.load()?"Load a track first.":"Chargez d'abord un morceau.","DJ Decks"); return;
         }
-        if(action==2) { RefreshDeckTags(deck); return; }
+        if(action==2) { RefreshDeckTags(deck,true); return; }
         // Public context-command identifiers from the components' upstream sources.
         static const GUID bpm={0x518d0234,0x3134,0x4fea,{0xbd,0x43,0x8f,0x61,0xee,0x3a,0x35,0x3b}};
         static const GUID key={0xefb0d751,0x1a4e,0x4ea3,{0x9d,0x22,0x68,0x25,0x64,0xe7,0xad,0xca}};
         metadb_handle_list tracks;
         tracks.add_item(metadb::get()->handle_create(m_savedPath[deck].c_str(),m_savedSubsong[deck]));
+        bool available=false;
+        for(auto item:service_enum_t<contextmenu_item>()) for(unsigned n=0;n<item->get_num_items();++n)
+            if(item->get_item_guid(n)==(action==0?bpm:key)) available=true;
+        if(!available) { popup_message::g_show("Analysis command unavailable: foo_bpm / foo_musical_key.","DJ Decks"); return; }
+        ReleaseForTags(deck);
         // Never hold the audio mutex while another component opens a modal dialog.
         try {
             if(!menu_helpers::run_command_context(action==0?bpm:key,pfc::guid_null,tracks))
@@ -1385,6 +1560,7 @@ namespace {
 	void CDjPanel::LoadDeck(int deck, const char * path, t_uint32 subsong) {
 		StopWaveThread(deck);   // l'ancienne analyse n'a plus d'interet
 		m_view[deck] = 0.0;     // on repart en vue complete
+        m_waveNeedsRebuild[deck]=false;
 
 		// Nom affiche : la partie apres le dernier "\" ou "/" de l'adresse
 		{
@@ -1780,6 +1956,7 @@ namespace {
 	}
 
 	void CDjPanel::TogglePlay(int deck) {
+        if(!ReopenAfterTags(deck)) return;
 		std::lock_guard<std::mutex> lock(m_lock);
 		Deck & d = m_deck[deck];
 		if (!d.loaded) return;
@@ -1817,6 +1994,7 @@ namespace {
 
 	// Toggle both playing flags under one lock so the mixer observes them together.
 	void CDjPanel::PlayBoth() {
+        if(!ReopenAfterTags(0) || !ReopenAfterTags(1)) return;
 		std::lock_guard<std::mutex> lock(m_lock);
 		if (!m_deck[0].loaded || !m_deck[1].loaded) return;
 		const bool next[2] = { !m_deck[0].playing, !m_deck[1].playing };
@@ -1847,6 +2025,7 @@ namespace {
 		std::lock_guard<std::mutex> lock(m_lock);
 		Deck & d = m_deck[deck];
 		if (!d.loaded) return;
+        if(!d.helper) { m_error[deck]=g_english.load()?L"Finish analysis, then press Play":L"Terminez l'analyse puis cliquez Lecture"; return; }
 
 		seconds = (std::max)(0.0, (std::min)(seconds, (std::max)(0.0, d.length - 0.1)));
 		try {

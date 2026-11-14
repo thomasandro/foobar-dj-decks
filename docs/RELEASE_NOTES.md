@@ -1,25 +1,32 @@
-# DJ Decks 0.15.0-alpha.1 — experimental prerelease
+# DJ Decks 0.17.1-alpha.1 — experimental prerelease
 
-Second public alpha for foobar2000 Windows x64 / Default UI.
+New since 0.15.0-alpha.1:
+- **Glossy cyan/orange interface, raised black icon buttons and bilingual hover tooltips.**
+- **Automatic harmonic key matching** with the nearest transposition, without changing
+  tempo. Same-mode keys match exactly; opposite modes target the relative major/minor.
+- **Tag-writing conflict fix:** analysis pauses/releases every deck reading the same file.
+  After saving/cancelling the analyser, press **Play** to reopen at the retained position.
+- **Refresh tags feedback:** fresh file BPM/database key values, raw vs effective BPM.
+- Compact aligned controls, larger icons, rounded molded rims, reflections and shadows.
 
-New since 0.12.0-alpha.1:
-- Camelot and standard key labels, e.g. **8A (Am)**, reading foobar database/file tags.
-- Colored harmonic compatibility hints: green/OK, amber/~, grey/? when uncertain.
-- Independent **−12 to +12 semitone transposition**, without changing tempo.
-- Per-deck **Calculate BPM**, **Calculate key**, **Refresh tags**; the analysis buttons
-  require optional **foo_bpm** and **foo_musical_key**, respectively. Their dialogs,
-  validation and tag-writing preferences still apply; live invocation needs testing.
-- Per-deck **±8%, ±16%, ±50% speed ranges**, respected by BPM matching and beat SYNC.
-- Persisted transposition/range and improved key-badge contrast.
+![DJ Decks 0.17.1 interface](https://raw.githubusercontent.com/thomasandro/foobar-dj-decks/v0.17.1-alpha.1/docs/images/dj-decks-0.17.1.png)
 
-Install `foo_dj-0.15.0-alpha.1-win-x64.fb2k-component` via Preferences → Components → Install.
-The matching `foo_dj-0.15.0-alpha.1-source.zip` includes the complete source and bundled
-dependencies. SHA-256 hashes are provided in `SHA256SUMS.txt`.
+User-supplied screenshot from 0.17.1-dev; same UI in this public alpha.
 
-[Detailed changelog, including unpublished development versions](https://github.com/thomasandro/foobar-dj-decks/blob/main/CHANGELOG.md)
+Install the **win-x64.fb2k-component** asset via Preferences → Components → Install.
+Complete matching source and dependencies: **source.zip**. Distribute it alongside
+the component. SHA-256 hashes: **SHA256SUMS.txt**.
 
-**Experimental, unsigned, not a stability release.** Build and native tests passed,
-including 30 synthetic audio duration/frequency cases. Clean-profile install/load,
-real-music listening tests, external analysis commands and extended runtime/shutdown
-checks remain pending. Slow shutdown has been observed. No limiter or headphone cue;
-automatic beat SYNC remains experimental. See [known issues](https://github.com/thomasandro/foobar-dj-decks/blob/main/docs/KNOWN_ISSUES.md).
+[Detailed changelog including unpublished milestones](https://github.com/thomasandro/foobar-dj-decks/blob/main/CHANGELOG.md)
+· [Français](https://github.com/thomasandro/foobar-dj-decks/blob/main/README.fr.md)
+
+**Experimental, unsigned, Windows x64 / foobar2000 2.x / Default UI.**
+Native tests include harmonic matching, reader release/position retention, control geometry
+and offscreen graphics, plus 30 synthetic audio duration/frequency cases.
+The user approved the appearance; clean-profile installation, live tag-writing regression,
+tooltip behavior across environments, real-music quality and extended shutdown/unload
+checks remain pending. No limiter/headphone cue; automatic beat SYNC is still experimental.
+Slow shutdown has been observed and remains under investigation.
+
+[Known issues](https://github.com/thomasandro/foobar-dj-decks/blob/main/docs/KNOWN_ISSUES.md)
+· [Validation](https://github.com/thomasandro/foobar-dj-decks/blob/main/docs/VALIDATION.md)

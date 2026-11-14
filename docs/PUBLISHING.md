@@ -11,3 +11,5 @@ Exclude profiles, sessions, music, personal paths and private debug files.
 Preserve original MIT and separate upstream notices, including LGPL SoundTouch.
 Local milestones are documented in CHANGELOG.md; they were not separate GitHub releases.
 Publish only when requested by the owner.
+
+Third alpha: v0.17.1-alpha.1, authorized on 2026-11-14, with user-supplied screenshot.

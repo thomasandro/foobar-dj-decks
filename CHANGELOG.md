@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.17.1-alpha.1 — 2026-11-14 (public prerelease)
+
+Third public alpha, collecting the local milestones 0.16.0-dev, 0.16.1-dev,
+0.17.0-dev and 0.17.1-dev detailed below. They were not separate GitHub releases.
+The public build changes the version label/documentation from 0.17.1-dev.
+
+- Automatic harmonic key matching using the nearest semitone transposition, without
+  changing tempo: same-mode exact matching or opposite-mode relative major/minor.
+- Release loaded file readers before BPM/key analysis so external plugins can write tags;
+  keep decks paused until explicit Play, reopening at the retained position.
+- Visible tag-refresh feedback with raw/effective BPM and key values.
+- Glossy cyan/orange molded-plastic casings, black raised vector-icon buttons,
+  native bilingual tooltips, larger pictograms and compact aligned control rows.
+- User-supplied screenshot added to both READMEs and release assets; appearance approved
+  by the user. This does not establish broad host stability or audio-quality validation.
+- Native regression/audio/graphics tests passed; known runtime limits remain documented.
+
+
+## 0.17.1-dev — local development, not separately published
+
+- Closer to the approved glossy-plastic concept: raised rounded rims, curved broad
+  reflections, lower-edge highlights and soft button shadows.
+- Replace stretched action bars with compact, taller black buttons and larger icons.
+- Put grid tools, transposition, harmonic matching and key lock on one aligned row.
+  Keep separate beat/BPM matching controls beside the speed settings.
+- Preserve numeric values and bilingual tooltips; adapt hit areas to the new layout.
+
+## 0.17.0-dev — local development, not separately published
+
+- Glossy molded-plastic appearance: cyan/orange deck casings, black rounded buttons,
+  dark metadata/waveform displays and high-contrast numerical values.
+- Vector pictograms for transport, BPM/key analysis, metadata refresh, beat-grid tools,
+  key lock, harmonic matching, beat SYNC and BPM matching. Existing commands retained.
+- Native French/English hover tooltips for controls, sliders, range and language.
+  Tool rectangles follow panel resizing; tooltip resources are destroyed with the panel.
+- Crisp procedural icon rendering without raster scaling, WebView2 or external assets.
+- Offscreen skin/geometry tests at 900x650, 1280x720 and 1920x1080. Live-host
+  appearance/tooltips remain for user verification; no host capture or monitoring.
+
+## 0.16.1-dev — local development, not separately published
+
+- Before external BPM/key analysis, pause and release deck decoders plus waveform
+  readers for every deck holding the same physical file (including different subsongs).
+- Keep the file released through asynchronous analysis and result/tag-write dialogs.
+  After saving or cancelling, press Play to reopen at the retained position.
+  Seeking/SYNC do not reopen a released decoder prematurely.
+- Retain speed, range, transposition, metadata and manual grids. Rebuild interrupted
+  waveforms after explicit resume; no automatic restart or completion polling.
+- Refresh tags now reads fresh file BPM with database fallback, preserves database
+  key metadata, and shows tagged/effective BPM and key values instead of silent success.
+- Reader-release regression tests verify decoder ownership is dropped, audio buffers
+  cleared and position retained. Live-host tag-writing still requires verification.
+
+## 0.16.0-dev — local development, not separately published
+
+- Per-deck KEY = A/B (TON = A/B in French) chooses the nearest transposition
+  setting to match the other deck's effective tagged key, including its transposition.
+- Same-mode keys match exactly; opposite modes target the relative major/minor
+  sharing the same Camelot number. Transposition cannot change major into minor.
+- Does not modify speed, BPM, position, transport or the reference deck.
+- Rejects missing/unknown tags and non-neutral vinyl pitch; enable key lock first.
+- Matching respects the +/-12 semitone range and saves the selected transposition.
+
 ## 0.15.0-alpha.1 — 2026-11-13 (public prerelease)
 
 Second public alpha, collecting the local development steps 0.12.1-dev through

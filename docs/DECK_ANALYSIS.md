@@ -1,5 +1,15 @@
 # Deck analysis (development version)
 
+Since 0.16.1-dev, starting analysis pauses and releases all DJ Decks readers of the
+same physical file, including waveform workers. After saving results (or cancelling
+the analyser), press Play to reopen at the retained position. Do not resume before
+the external component finishes writing. Other applications can still hold the file.
+There is no automatic completion detection for these independent context commands.
+
+Refresh tags reads file BPM with database fallback and keeps database key metadata
+preferred (Musical Key Analyser can store it without writing the file). A message
+shows raw tagged BPM, speed-adjusted effective BPM and key. It does not analyse audio.
+
 Each deck has Calculate BPM, Calculate key and Refresh tags buttons. Commands apply
 to its loaded original file/subsong, not the current playlist selection and not the
 tempo-adjusted/transposed output. This does not change transport or playback position.
@@ -11,7 +21,7 @@ preferences apply. Save/confirm BPM results in the plugin's dialog when required
 Key analysis may store results only in foobar's database unless file writing is enabled.
 
 Host metadata notifications refresh loaded deck values; Refresh tags also reads the
-current database manually. No decoder reload is needed. Supported metadata names are
+file BPM and current database manually. It does not reopen suspended audio decoders. Supported metadata names are
 BPM/TEMPO and INITIALKEY/INITIAL KEY/KEY (case-insensitive). Non-default names used by
 analyser preferences must be changed to supported names for DJ Decks to display them.
 New BPM values also refresh the beat-grid calculation; they do not automatically change

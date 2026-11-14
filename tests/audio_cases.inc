@@ -6,6 +6,15 @@ int main(){for(bool fixed : {false,true}) for(double speed : {0.5,0.84,1.0,1.16,
  double hz=crossings*48000.0/(last-first),expected=440*(fixed?1:speed)*std::pow(2.0,pitch/12.0);assert(std::abs(hz-expected)<2.0);
  std::cout<<"fixed="<<fixed<<" speed="<<speed<<" duration="<<duration<<" frequency="<<hz<<" Hz\n";
  }
+ // A tag-analysis suspension must release the only decoder owner and all audio buffers,
+ // while preserving position for explicit resume. No reader is reopened here.
+ { Deck d; d.framesPlayed=45678; d.src={1,2}; d.pending={3,4};
+   d.stretch=std::make_shared<soundtouch::SoundTouch>();
+   std::weak_ptr<Input> reader=d.helper;
+   ReleaseDeckReader(d);
+   assert(reader.expired() && !d.helper && !d.playing && d.framesPlayed==45678);
+   assert(d.src.empty() && d.pending.empty() && !d.stretch && d.srcPos==0 && d.pendingPos==0);
+ }
  // Short files and EOF must still be drained; no decoder source left pending.
  std::cout<<"Actual FillDeck integration: 30 duration/pitch/transposition tests passed\n";
 }

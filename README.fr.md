@@ -3,18 +3,22 @@
 [English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
-**0.15.0-alpha.1 est une préversion alpha expérimentale.**
+**0.17.1-alpha.1 est une préversion alpha expérimentale.**
 
 ## ⬇ Télécharger l’extension
 
-**[Télécharger DJ Decks 0.15.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.15.0-alpha.1/foo_dj-0.15.0-alpha.1-win-x64.fb2k-component)**
+**[Télécharger DJ Decks 0.17.1-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.17.1-alpha.1/foo_dj-0.17.1-alpha.1-win-x64.fb2k-component)**
 
 Fichier installable `.fb2k-component` pour foobar2000 2.x x64.
 Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
 
-[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.15.0-alpha.1)
+[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.17.1-alpha.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
+
+![Interface DJ Decks cyan/orange et boutons noirs](docs/images/dj-decks-0.17.1.png)
+
+*Capture fournie par l’utilisateur de la 0.17.1-dev ; même interface dans l’alpha publique.*
 
 ## Fonctions
 
@@ -25,6 +29,8 @@ ainsi que les retours reproductibles sont bienvenus.
 - Affichage du BPM renseigné dans les tags ; plages de vitesse au choix : ±8 %, ±16 % ou ±50 %.
 - Mode vinyle ou tempo avec tonalité préservée par SoundTouch.
 - Transposition indépendante de −12 à +12 demi-tons, sans modifier le tempo.
+- Calage harmonique automatique : même tonalité ou relative compatible, transposition la plus proche.
+- Coque brillante cyan/orange, boutons noirs à pictogrammes et infobulles français/anglais.
 - Tonalité Camelot et classique, par exemple 8A (Am), avec indicateur de compatibilité coloré.
 - Calcul BPM/tonalité via les composants facultatifs foo_bpm / foo_musical_key,
   actualisation sans recharger le son. [Détails](docs/DECK_ANALYSIS.md).
@@ -42,7 +48,7 @@ ont été faits avec foobar2000 2.26.3 preview du 8 novembre 2026. Les autres ve
 Columns UI n’est fournie.
 
 Pour le premier essai, utiliser un profil portable séparé. Installer
-`foo_dj-0.15.0-alpha.1-win-x64.fb2k-component` via
+`foo_dj-0.17.1-alpha.1-win-x64.fb2k-component` via
 **Préférences → Composants → Installer…**, puis redémarrer. Dans l’édition de disposition
 de Default UI, ajouter **DJ Decks** (Utilitaires). Un grand panneau est préférable ;
 commencer vers 900 × 650 px. WebView2, SMP et Smooth Browser ne sont pas nécessaires. Le composant utilise
@@ -73,6 +79,12 @@ Cliquer sur ±16 % pour choisir ±8 %, ±16 % ou ±50 %. Une plage plus étroite
 ramène la vitesse à sa limite si nécessaire. Le choix est mémorisé par platine.
 Les boutons de transposition −/+ changent la hauteur par demi-ton ; le centre remet
 à zéro, sans changer le tempo. La tonalité affichée suit cette transposition.
+Le bouton note/flèche cale la tonalité sur l’autre platine, ou sur sa relative compatible
+si les modes majeur/mineur diffèrent. Activer la tonalité fixe si la vitesse vinyle est modifiée.
+Survoler les icônes pour afficher leur fonction dans la langue choisie.
+L’analyse libère le fichier et met la platine en pause pour permettre l’écriture des tags.
+Après validation des résultats dans le plugin, Lecture reprend à la position conservée.
+Actualiser tags affiche les BPM brut/effectif et la tonalité relus.
 Vert/OK : association Camelot habituelle ; orange/~ : autre association ; gris/? :
 tag inconnu ou vitesse vinyle non neutre. Cela reste un guide pour l’oreille.
 

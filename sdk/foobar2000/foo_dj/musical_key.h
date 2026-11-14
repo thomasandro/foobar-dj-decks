@@ -70,6 +70,20 @@ inline std::wstring transpose(const std::wstring& tag,int semitones) {
     int n=(std::stoi(c)-1+7*(semitones%12)+120)%12+1;
     return std::to_wstring(n)+c.back();
 }
+// Match the reference's effective key, retaining the destination's major/minor mode.
+// Search absolute settings so existing transposition and the +/-12 range are respected.
+inline bool match(const std::wstring& own,const std::wstring& reference,int current,int referenceShift,int& result) {
+    const auto a=camelot(own), b=camelot(transpose(reference,referenceShift));
+    if(a.empty() || b.empty() || current < -12 || current > 12) return false;
+    const auto target=b.substr(0,b.size()-1)+a.back();
+    bool found=false; int best=0;
+    for(int s=-12;s<=12;++s) if(transpose(a,s)==target) {
+        const int distance=std::abs(s-current), previous=std::abs(best-current);
+        if(!found || distance<previous || (distance==previous && std::abs(s)<std::abs(best))) {best=s;found=true;}
+    }
+    if(found) result=best;
+    return found;
+}
 inline Compatibility compatibility(const std::wstring& a,const std::wstring& b,bool pitchStable=true) {
     const auto x=camelot(a), y=camelot(b);
     if(!pitchStable || x.empty() || y.empty()) return Compatibility::unknown;

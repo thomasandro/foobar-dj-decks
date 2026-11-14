@@ -1,8 +1,15 @@
-# Validation — 2026-11-13
+# Validation — 2026-11-14
 
-Release: **0.15.0-alpha.1**, based on locally installed 0.15.0-dev.
+Release: **0.17.1-alpha.1**, based on locally installed 0.17.1-dev.
 Release preparation does not launch, capture or monitor foobar. The user's development
 installation was updated separately on request; this does not validate a clean profile.
+
+## User feedback and screenshot
+
+The user approved the 0.17.1-dev interface and explicitly supplied its screenshot for
+publication. No new host capture or monitoring was performed. The image is preserved
+unchanged at docs/images/dj-decks-0.17.1.png. Tooltip/tag-writing behavior is not
+inferred from that screenshot.
 
 ## Automated checks
 
@@ -15,6 +22,11 @@ installation was updated separately on request; this does not validate a clean p
 - Actual FillDeck/SoundTouch processing: 30 synthetic stereo sine-wave cases combining
   speeds 0.5/0.84/1/1.16/1.5, key lock/vinyl and pitches −12/0/+7 semitones. Duration
   tolerance 25 ms, frequency tolerance 2 Hz; this is not a music-quality assessment.
+- File-reader release regression: decoder ownership dropped, pending audio cleared and
+  position retained while awaiting explicit resume after tag analysis.
+- Automatic harmonic match across key pairs and existing/reference transpositions.
+- Offscreen skin rendering and non-overlapping control layouts at 900x650, 1280x720,
+  1920x1080. No foobar window or screen capture is used.
 - Package/source ZIP integrity, payload/source equality, hashes and privacy checks.
 
 ## Runtime checks still pending
