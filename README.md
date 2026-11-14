@@ -3,27 +3,30 @@
 [Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
-**0.18.0-alpha.1 is an experimental alpha release.**
+**0.20.0-alpha.1 is an experimental alpha release.**
 
 ## ⬇ Download the component
 
-**[Download DJ Decks 0.18.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.18.0-alpha.1/foo_dj-0.18.0-alpha.1-win-x64.fb2k-component)**
+**[Download DJ Decks 0.20.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.20.0-alpha.1/foo_dj-0.20.0-alpha.1-win-x64.fb2k-component)**
 
 Installable `.fb2k-component` package for foobar2000 2.x x64.
 In foobar2000: **Preferences → Components → Install…**, then restart.
 
-[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.18.0-alpha.1)
+[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.20.0-alpha.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
 
-![DJ Decks glossy cyan/orange interface](docs/images/dj-decks-0.17.1.png)
+![DJ Decks glossy cyan/orange interface](docs/images/dj-decks-playlists-0.20.png)
 
-*User-supplied screenshot of 0.17.1-dev. Version 0.18.0 adds a compact lower strip, hover/press feedback and Stop/Release buttons.*
+*User-supplied screenshot of the themed floating playlists; the AUTO menu is not shown.*
+
+Thanks to [StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621)
+for suggesting playlist popups and for the UI/file-release feedback.
 
 ## Features
 
 - Independent load, play/pause and seek for A and B; shared start/pause/swap button.
-- Per-deck volume and constant-power crossfader with smoothed gain changes.
+- Per-deck volume; equal-power or linear crossfader with smoothed gain changes.
 - Waveforms with zoom, elapsed/remaining-region shading and clickable seek.
 - Front covers, artist/title on separate scrolling lines, French/English interface.
 - Tagged BPM display; selectable ±8%, ±16% or ±50% speed range, vinyl or SoundTouch key-lock mode.
@@ -39,7 +42,10 @@ are particularly welcome.
 - Solid estimated/manual beat markers; dotted indicative BPM grids when detection is uncertain.
 - Manual grid shift, “Beat here”, Auto reset; grids remembered per file and subsong.
 - Loaded tracks and positions restored paused after a normal close.
-- Native foobar/Explorer drag-and-drop; optional compatible WebView2 text payloads.
+- Per-deck saved playlists with two-line Current/Next previews and independent themed floating windows.
+- Ordered multi-track drops, multi-selection reorder/removal and double-click loading. [Playlist guide](docs/PLAYLISTS.md).
+- AUTO: independent auto-next or alternating A/B with 0–30 second fades, equal-power/linear curve. [Automatic playback](docs/AUTOMATIC_PLAYBACK.md).
+- Native foobar/Explorer drag-and-drop; optional compatible Smooth Playlist/Browser text payloads.
 
 ## Requirements and installation
 
@@ -48,7 +54,7 @@ foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions ha
 not been validated. There is no x86, ARM64, macOS or native Columns UI build.
 
 Prefer an isolated portable profile for the first test. Install
-`foo_dj-0.18.0-alpha.1-win-x64.fb2k-component` with
+`foo_dj-0.20.0-alpha.1-win-x64.fb2k-component` with
 **Preferences → Components → Install…**, then restart. In Default UI layout editing
 mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
 This component does not require WebView2, Spider Monkey Panel or Smooth Browser.
@@ -63,7 +69,11 @@ For local builds and packaging, see [build instructions](docs/BUILD.md).
 
 ## Quick use
 
-Drag a track to each deck. Dropping a selection loads its first track. Play each
+Drop tracks on each deck to append them to its saved playlist; an empty deck loads
+the first incoming track paused. Click **≡** or the Current/Next preview for its
+floating playlist. Double-click to load; Delete removes entries, never files.
+Use **AUTO** for auto-next or alternating A/B and fade settings. These automatic
+modes are experimental; same-deck auto-next is not gapless. Play each
 independently or use the common button. It toggles both states, so with only one
 deck playing it pauses that deck and starts the other. Set crossfader and volumes
 before listening to both together; there is no output limiter.

@@ -15,3 +15,4 @@ Publish only when requested by the owner.
 Third alpha: v0.17.1-alpha.1, authorized on 2026-11-14, with user-supplied screenshot.
 
 Fourth alpha: v0.18.0-alpha.1, authorized on 2026-11-14.
+Fifth alpha: v0.20.0-alpha.1, authorized on 2026-11-14 with the new user-supplied playlist screenshot and credit to StyxCrosser.

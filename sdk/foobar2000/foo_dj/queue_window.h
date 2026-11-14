@@ -1,0 +1,194 @@
+#pragma once
+#include <functional>
+#include <commctrl.h>
+#include "dj_skin.h"
+
+// Owned modeless window. All callbacks and list mutations run on the UI thread.
+class DjQueueWindow : public CWindowImpl<DjQueueWindow> {
+public:
+    DECLARE_WND_CLASS_EX(L"foo_dj_queue_v1",CS_DBLCLKS,(-1))
+    std::function<bool(IDataObject*)> accepts;
+    std::function<void(IDataObject*,size_t)> dropped;
+    std::function<void(int,std::vector<size_t>,size_t)> action;
+    HWND list=nullptr;
+    bool english=false;
+    int deckIndex=0;
+    std::vector<size_t> selected() const {
+        int count=(int)::SendMessage(list,LB_GETSELCOUNT,0,0);if(count<=0)return {};
+        std::vector<int> raw(count);::SendMessage(list,LB_GETSELITEMS,count,(LPARAM)raw.data());
+        return std::vector<size_t>(raw.begin(),raw.end());
+    }
+    void refresh(const std::vector<std::wstring>& labels,const std::vector<size_t>& selection={}) {
+        if(!list)return;
+        auto top=::SendMessage(list,LB_GETTOPINDEX,0,0);::SendMessage(list,WM_SETREDRAW,FALSE,0);
+        ::SendMessage(list,LB_RESETCONTENT,0,0);
+        for(auto& s:labels)::SendMessageW(list,LB_ADDSTRING,0,(LPARAM)s.c_str());
+        for(auto n:selection)if(n<labels.size())::SendMessage(list,LB_SETSEL,TRUE,n);
+        ::SendMessage(list,LB_SETTOPINDEX,top,0);::SendMessage(list,WM_SETREDRAW,TRUE,0);::InvalidateRect(list,nullptr,TRUE);
+    }
+    void open(HWND owner,int deck,bool en) {
+        english=en;deckIndex=deck;
+        std::wstring title=en?L"DJ Decks - Playlist ":L"DJ Decks - Liste ";title+=deck?L"B":L"A";
+        if(!m_hWnd){CRect r(100+deck*80,100+deck*60,660+deck*80,500+deck*60);
+            Create(owner,r,title.c_str(),WS_OVERLAPPEDWINDOW,WS_EX_TOOLWINDOW);}
+        SetWindowText(title.c_str());
+        const wchar_t* fr[]={L"Charger",L"Supprimer",L"Monter",L"Descendre"};
+        const wchar_t* eng[]={L"Load",L"Remove",L"Move up",L"Move down"};
+        for(int n=0;n<4;++n)::SetWindowTextW(buttons[n],en?eng[n]:fr[n]);
+        ::SetWindowTextW(help,en?L"Drop tracks here. Double-click: load. Delete: remove. Drag: reorder.":L"Deposer ici. Double-clic : charger. Suppr : retirer. Glisser : reordonner.");
+        ShowWindow(SW_SHOWNORMAL);SetForegroundWindow(m_hWnd);::SetFocus(list);
+    }
+    BEGIN_MSG_MAP_EX(DjQueueWindow)
+        MSG_WM_CREATE(OnCreate)
+        MSG_WM_SIZE(OnSize)
+        MSG_WM_CLOSE(OnClose)
+        MSG_WM_DESTROY(OnDestroy)
+        MSG_WM_GETMINMAXINFO(OnMinMax)
+        MSG_WM_PAINT(OnPaint)
+        MSG_WM_ERASEBKGND(OnErase)
+        MESSAGE_HANDLER(WM_DRAWITEM,OnDrawItem)
+        MESSAGE_HANDLER(WM_CTLCOLORLISTBOX,OnColor)
+        MESSAGE_HANDLER(WM_CTLCOLORSTATIC,OnColor)
+        MESSAGE_HANDLER(WM_COMMAND,OnCommand)
+    END_MSG_MAP()
+private:
+    HWND buttons[4]={},help=nullptr;
+    HBRUSH darkBrush=nullptr;
+    HFONT font=nullptr;
+    int hotButton=-1;
+    COLORREF accent()const{return deckIndex?RGB(245,143,27):RGB(0,194,211);}
+    static LRESULT CALLBACK ButtonProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data){
+        auto self=(DjQueueWindow*)data;
+        if(msg==WM_MOUSEMOVE){
+            int index=::GetDlgCtrlID(h)-101;
+            if(self->hotButton!=index){int old=self->hotButton;self->hotButton=index;if(old>=0)::InvalidateRect(self->buttons[old],nullptr,FALSE);::InvalidateRect(h,nullptr,FALSE);}
+            TRACKMOUSEEVENT track={sizeof(track),TME_LEAVE,h,0};::TrackMouseEvent(&track);
+        }
+        if(msg==WM_MOUSELEAVE){self->hotButton=-1;::InvalidateRect(h,nullptr,FALSE);}
+        return DefSubclassProc(h,msg,w,l);
+    }
+    BOOL OnErase(CDCHandle){return TRUE;}
+    void OnPaint(CDCHandle){
+        CPaintDC dc(m_hWnd);CRect r;GetClientRect(&r);
+        ::FillRect(dc,&r,darkBrush);dj_skin::surface(dc,r,accent(),true);
+        CRect inner=r;inner.DeflateRect(6,6);::FillRect(dc,&inner,darkBrush);
+    }
+    LRESULT OnColor(UINT,WPARAM w,LPARAM,BOOL&){
+        auto dc=(HDC)w;::SetTextColor(dc,RGB(180,195,210));::SetBkColor(dc,RGB(16,19,25));return (LRESULT)darkBrush;
+    }
+    LRESULT OnDrawItem(UINT,WPARAM,LPARAM value,BOOL& handled){
+        auto item=(DRAWITEMSTRUCT*)value;
+        if(item->CtlType==ODT_LISTBOX){
+            if(item->itemID==(UINT)-1)return TRUE;
+            auto dc=item->hDC;auto r=item->rcItem;bool selected=(item->itemState&ODS_SELECTED)!=0;
+            COLORREF fill=selected?(deckIndex?RGB(82,53,25):RGB(15,65,74)):((item->itemID%2)?RGB(23,28,35):RGB(16,21,28));
+            HBRUSH brush=::CreateSolidBrush(fill);::FillRect(dc,&r,brush);::DeleteObject(brush);
+            if(selected){RECT bar=r;bar.right=bar.left+3;brush=::CreateSolidBrush(accent());::FillRect(dc,&bar,brush);::DeleteObject(brush);}
+            int length=(int)::SendMessage(list,LB_GETTEXTLEN,item->itemID,0);if(length<0)return TRUE;
+            std::wstring text(length+1,L'\0');::SendMessageW(list,LB_GETTEXT,item->itemID,(LPARAM)text.data());
+            auto old=::SelectObject(dc,font);::SetBkMode(dc,TRANSPARENT);::SetTextColor(dc,selected?RGB(244,248,252):RGB(208,218,231));
+            r.left+=10;r.right-=8;::DrawTextW(dc,text.c_str(),length,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+            ::SelectObject(dc,old);if(item->itemState&ODS_FOCUS)::DrawFocusRect(dc,&item->rcItem);return TRUE;
+        }
+        if(item->CtlType==ODT_BUTTON){
+            auto dc=item->hDC;::FillRect(dc,&item->rcItem,darkBrush);
+            dj_skin::surface(dc,item->rcItem,accent(),false,(int)item->CtlID-101==hotButton,(item->itemState&ODS_SELECTED)!=0);
+            wchar_t label[80]={};::GetWindowTextW(item->hwndItem,label,80);auto r=item->rcItem;
+            auto old=::SelectObject(dc,font);::SetBkMode(dc,TRANSPARENT);::SetTextColor(dc,RGB(239,243,247));
+            if(item->itemState&ODS_SELECTED)::OffsetRect(&r,0,1);
+            ::DrawTextW(dc,label,-1,&r,DT_SINGLELINE|DT_VCENTER|DT_CENTER|DT_NOPREFIX);
+            ::SelectObject(dc,old);if(item->itemState&ODS_FOCUS){::InflateRect(&r,-7,-7);::DrawFocusRect(dc,&r);}return TRUE;
+        }
+        handled=FALSE;return 0;
+    }
+    CPoint start;bool dragging=false,preserveSelection=false;
+    std::vector<size_t> dragSelection;
+    class Target : public IDropTarget {
+    public:
+        DjQueueWindow* window;LONG refs=1;bool ok=false;
+        Target(DjQueueWindow* w):window(w){}
+        HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** out)override {
+            if(!out)return E_POINTER;*out=nullptr;
+            if(id==IID_IUnknown||id==IID_IDropTarget){*out=this;AddRef();return S_OK;}return E_NOINTERFACE;
+        }
+        ULONG STDMETHODCALLTYPE AddRef()override{return InterlockedIncrement(&refs);}
+        ULONG STDMETHODCALLTYPE Release()override{auto n=InterlockedDecrement(&refs);if(!n)delete this;return n;}
+        HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* o,DWORD,POINTL,DWORD* e)override {
+            ok=window&&window->accepts&&window->accepts(o);if(e)*e=ok?DROPEFFECT_COPY:DROPEFFECT_NONE;return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE DragOver(DWORD,POINTL,DWORD* e)override {if(e)*e=ok?DROPEFFECT_COPY:DROPEFFECT_NONE;return S_OK;}
+        HRESULT STDMETHODCALLTYPE DragLeave()override {ok=false;return S_OK;}
+        HRESULT STDMETHODCALLTYPE Drop(IDataObject* o,DWORD,POINTL p,DWORD* e)override {
+            bool accept=ok&&window&&window->dropped;
+            if(accept){POINT q={p.x,p.y};::ScreenToClient(window->list,&q);window->dropped(o,window->boundary(q));}
+            if(e)*e=accept?DROPEFFECT_COPY:DROPEFFECT_NONE;ok=false;return S_OK;
+        }
+    };
+    Target* target=nullptr;
+    size_t boundary(POINT p)const {
+        int count=(int)::SendMessage(list,LB_GETCOUNT,0,0);if(count<=0)return 0;
+        RECT client;::GetClientRect(list,&client);
+        if(p.y<0)return (size_t)::SendMessage(list,LB_GETTOPINDEX,0,0);
+        DWORD hit=(DWORD)::SendMessage(list,LB_ITEMFROMPOINT,0,MAKELPARAM(p.x,p.y));
+        int index=LOWORD(hit);RECT row={};::SendMessage(list,LB_GETITEMRECT,index,(LPARAM)&row);
+        return (std::min)((size_t)count,(size_t)(index+(p.y>=(row.top+row.bottom)/2)));
+    }
+    static LRESULT CALLBACK ListProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data) {
+        auto self=(DjQueueWindow*)data;
+        if(msg==WM_KEYDOWN && w==VK_DELETE){if(self->action)self->action(1,self->selected(),0);return 0;}
+        if(msg==WM_KEYDOWN && w==VK_RETURN){if(self->action)self->action(0,self->selected(),0);return 0;}
+        if(msg==WM_LBUTTONDOWN){
+            self->start=CPoint(GET_X_LPARAM(l),GET_Y_LPARAM(l));
+            DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
+            self->preserveSelection=!(w&(MK_CONTROL|MK_SHIFT))&&!HIWORD(hit)&&::SendMessage(h,LB_GETSEL,LOWORD(hit),0)>0;
+            LRESULT result=0;
+            if(self->preserveSelection){::SetFocus(h);::SetCapture(h);}
+            else result=DefSubclassProc(h,msg,w,l);
+            self->dragSelection=self->selected();self->dragging=false;return result;
+        }
+        if(msg==WM_MOUSEMOVE && (w&MK_LBUTTON) && !self->dragSelection.empty()) {
+            int x=GET_X_LPARAM(l),y=GET_Y_LPARAM(l);
+            if(abs(x-self->start.x)>GetSystemMetrics(SM_CXDRAG)||abs(y-self->start.y)>GetSystemMetrics(SM_CYDRAG))self->dragging=true;
+            if(self->dragging){::SetCursor(::LoadCursor(nullptr,IDC_SIZEALL));RECT r;::GetClientRect(h,&r);auto top=::SendMessage(h,LB_GETTOPINDEX,0,0);
+                if(y<0&&top>0)::SendMessage(h,LB_SETTOPINDEX,top-1,0);
+                if(y>r.bottom)::SendMessage(h,LB_SETTOPINDEX,top+1,0);return 0;}
+        }
+        if(msg==WM_LBUTTONUP && self->dragging){
+            POINT p={GET_X_LPARAM(l),GET_Y_LPARAM(l)};auto sel=self->dragSelection;self->dragging=false;self->dragSelection.clear();
+            DefSubclassProc(h,msg,w,l);if(::GetCapture()==h)::ReleaseCapture();if(self->action)self->action(4,sel,self->boundary(p));return 0;
+        }
+        if(msg==WM_LBUTTONUP && self->preserveSelection){
+            self->preserveSelection=false;::ReleaseCapture();DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
+            if(!HIWORD(hit)){::SendMessage(h,LB_SETSEL,FALSE,-1);::SendMessage(h,LB_SETSEL,TRUE,LOWORD(hit));}return 0;
+        }
+        if(msg==WM_CAPTURECHANGED){self->dragging=false;self->dragSelection.clear();}
+        return DefSubclassProc(h,msg,w,l);
+    }
+    int OnCreate(LPCREATESTRUCT) {
+        darkBrush=::CreateSolidBrush(RGB(16,19,25));
+        font=::CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+        list=::CreateWindowExW(0,L"LISTBOX",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|WS_TABSTOP|LBS_NOTIFY|LBS_EXTENDEDSEL|LBS_NOINTEGRALHEIGHT|LBS_OWNERDRAWFIXED|LBS_HASSTRINGS,0,0,0,0,m_hWnd,(HMENU)100,nullptr,nullptr);
+        ::SendMessage(list,LB_SETITEMHEIGHT,0,28);
+        ::SetWindowSubclass(list,ListProc,1,(DWORD_PTR)this);
+        for(int n=0;n<4;++n){buttons[n]=::CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,0,0,m_hWnd,(HMENU)(INT_PTR)(101+n),nullptr,nullptr);::SetWindowSubclass(buttons[n],ButtonProc,1,(DWORD_PTR)this);}
+        help=::CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,0,0,0,0,m_hWnd,nullptr,nullptr,nullptr);
+        for(auto h:{list,help,buttons[0],buttons[1],buttons[2],buttons[3]})::SendMessage(h,WM_SETFONT,(WPARAM)font,FALSE);
+        target=new Target(this);if(FAILED(::RegisterDragDrop(list,target))){target->Release();target=nullptr;}
+        return 0;
+    }
+    void OnSize(UINT,CSize size){
+        ::MoveWindow(help,8,8,(std::max)(1,(int)size.cx-16),30,TRUE);
+        ::MoveWindow(list,8,40,(std::max)(1,(int)size.cx-16),(std::max)(1,(int)size.cy-88),TRUE);
+        int width=((int)size.cx-24)/4;
+        for(int n=0;n<4;++n)::MoveWindow(buttons[n],8+n*width,size.cy-43,width-4,36,TRUE);
+        Invalidate(FALSE);
+    }
+    void OnClose(){ShowWindow(SW_HIDE);}
+    void OnMinMax(MINMAXINFO* info){info->ptMinTrackSize.x=480;info->ptMinTrackSize.y=220;}
+    void OnDestroy(){if(target){::RevokeDragDrop(list);target->window=nullptr;target->Release();target=nullptr;}::RemoveWindowSubclass(list,ListProc,1);for(auto h:buttons)::RemoveWindowSubclass(h,ButtonProc,1);list=nullptr;if(font){::DeleteObject(font);font=nullptr;}if(darkBrush){::DeleteObject(darkBrush);darkBrush=nullptr;}}
+    LRESULT OnCommand(UINT,WPARAM w,LPARAM,BOOL&) {
+        if(LOWORD(w)==100 && HIWORD(w)==LBN_DBLCLK){if(action)action(0,selected(),0);}
+        else if(LOWORD(w)>=101&&LOWORD(w)<=104){if(action)action(LOWORD(w)-101,selected(),0);}
+        return 0;
+    }
+};

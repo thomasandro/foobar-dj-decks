@@ -9,6 +9,13 @@ if (-not (Test-Path -LiteralPath $vcvars)) { throw 'vcvars64.bat not found.' }
 $output = Join-Path $repo 'build\tests'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $source = [IO.File]::ReadAllText((Join-Path $repo 'sdk\foobar2000\foo_dj\ui_element.cpp'))
+$autoFirst = $source.IndexOf('void CDjPanel::CancelAutomation()')
+$autoMenu = $source.IndexOf('void CDjPanel::AutomationMenu(', $autoFirst)
+$autoTick = $source.IndexOf('void CDjPanel::AutomationTick()', $autoMenu)
+$autoEnd = $source.IndexOf('void CDjPanel::TogglePlay(', $autoTick)
+if ($autoFirst -lt 0 -or $autoMenu -lt $autoFirst -or $autoEnd -lt $autoTick) { throw 'Automatic playback test extraction anchors changed.' }
+$auto = '#include "../../tests/auto_fixture.h"' + "`n" + $source.Substring($autoFirst,$autoMenu-$autoFirst) + $source.Substring($autoTick,$autoEnd-$autoTick) + "`n" + '#include "../../tests/auto_cases.inc"'
+[IO.File]::WriteAllText((Join-Path $output 'auto-generated.cpp'),$auto,[Text.UTF8Encoding]::new($false))
 $first = $source.IndexOf('static void ResampleStep(')
 $last = $source.IndexOf('// Use foobar''s front-cover', $first)
 if ($first -lt 0 -or $last -lt $first) { throw 'Audio fixture extraction anchors changed.' }

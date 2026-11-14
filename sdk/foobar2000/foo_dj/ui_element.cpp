@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 
 #include <ole2.h>
 #include <atlimage.h>
@@ -27,6 +27,9 @@
 #include "beat_sync.h"
 #include "dj_language.h"
 #include "dj_skin.h"
+#include "deck_queue.h"
+#include "auto_mix.h"
+#include "queue_window.h"
 #include <commctrl.h>
 #include "third_party/soundtouch/include/SoundTouch.h"
 
@@ -325,6 +328,8 @@ namespace {
         CRect matchKey;
         CRect analyse[3];
         CRect release;
+        CRect automation;
+        CRect queue[2],queueOpen;
 		CRect beat;
 		CRect key;
 		CRect sync;
@@ -363,7 +368,10 @@ namespace {
         // Compact, raised hardware-like controls; the waveform keeps most of the space.
         for(int k=0;k<3;++k) L.analyse[k]=CRect(left+k*64,d.top+122,left+k*64+56,d.top+164);
         L.release=CRect(left+192,d.top+122,left+248,d.top+164);
-        const int waveTop=d.top+172,waveBottom=d.bottom-164;
+        L.automation=CRect(right-90,d.top+122,right,d.top+164);
+        for(int n=0;n<2;++n)L.queue[n]=CRect(left+4,d.top+170+n*22,right-42,d.top+192+n*22);
+        L.queueOpen=CRect(right-38,d.top+172,right,d.top+212);
+        const int waveTop=d.top+220,waveBottom=d.bottom-164;
         L.wave=CRect(left,waveTop,right-46,waveBottom);
         L.vol=CRect(right-38,waveTop,right,waveBottom);
         const int row=d.bottom-154;
@@ -461,7 +469,7 @@ namespace {
             }
         }
     private:
-        LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); return 0; }
+        LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); UpdateQueue(0); UpdateQueue(1); return 0; }
         void RefreshDeckTags(int deck, bool readFile = false);
         void ReleaseForTags(int deck);
         bool ReopenAfterTags(int deck);
@@ -480,7 +488,7 @@ namespace {
             for(auto r:{PlayBothRect(rc),LanguageRect(rc,false)}) if(r.PtInRect(point))return r;
             for(int i=0;i<2;++i) {
                 auto L=MakeLayout(i,rc);
-                for(auto r:{L.btn[0],L.btn[1],L.analyse[0],L.analyse[1],L.analyse[2],L.release,L.zoomOut,L.zoomIn,
+                for(auto r:{L.btn[0],L.btn[1],L.analyse[0],L.analyse[1],L.analyse[2],L.release,L.automation,L.queueOpen,L.zoomOut,L.zoomIn,
                     L.gridControl[0],L.gridControl[1],L.gridControl[2],L.gridControl[3],L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key,L.beat,L.sync,L.range})
                     if(r.PtInRect(point))return r;
             }
@@ -514,6 +522,7 @@ namespace {
 		BOOL OnEraseBkgnd(CDCHandle);
 		// On ne redessine vite que si quelque chose bouge (lecture, curseur deplace) ; au repos, 4 fois par seconde.
 		void OnTimer(UINT_PTR id) {
+            AutomationTick();
 			if (m_cachePlaying[0] || m_cachePlaying[1] || m_drag != 0) { Invalidate(); return; }
 			CRect client; GetClientRect(&client);
 			for (int i = 0; i < 2; ++i) {
@@ -527,6 +536,26 @@ namespace {
 
 		void LoadDeck(int deck, const char * path, t_uint32 subsong);
 		void SaveSession();
+        bool m_chain[2]={false,false},m_alternate=false,m_autoChanging=false,m_autoArmed[2]={false,false};
+        bool m_altAvailable[2]={true,true};
+        int m_autoActive=0;
+        double m_fadeSeconds=5;
+        std::atomic<bool> m_linearFade{false};
+        dj_auto::Fade m_autoFade; // guarded by m_lock, advanced only by audio output frames
+        void AutomationMenu(int deck,CPoint point);
+        void AutomationTick();
+        void CancelAutomation();
+        bool NextQueue(int deck,bool play);
+        std::vector<dj_queue::Item> m_queue[2];
+        std::vector<std::wstring> m_queueLabels[2];
+        int m_queueCurrent[2]={-1,-1};
+        DjQueueWindow m_queueWindow[2];
+        void OpenQueue(int deck);
+        void UpdateQueue(int deck,const std::vector<size_t>& selected={});
+        void QueueAction(int deck,int action,std::vector<size_t> selected,size_t before);
+        void AddQueue(int deck,IDataObject* object,size_t before);
+        std::vector<dj_queue::Item> ExtractItems(IDataObject* object);
+        std::wstring QueueLabel(const dj_queue::Item& item);
 		LRESULT OnRestoreSession(UINT, WPARAM, LPARAM, BOOL &);
 		std::string m_savedPath[2];
 		t_uint32 m_savedSubsong[2] = {0, 0};
@@ -643,6 +672,7 @@ namespace {
 
 	void CDjPanel::OnDestroy() {
         if(m_tooltip) { ::DestroyWindow(m_tooltip); m_tooltip=nullptr; }
+		for(auto& window:m_queueWindow)if(window.m_hWnd)window.DestroyWindow();
 		KillTimer(kTimerId);
 		RevokeDrop();          // la fenetre n'accepte plus de depots
 		StopEngine();          // arrete proprement le moteur avant que la fenetre disparaisse
@@ -661,6 +691,7 @@ namespace {
 
 	// Place le crossfader selon la position x de la souris (0 = tout a gauche = deck A, 1 = tout a droite = deck B).
 	void CDjPanel::SetFaderFromX(int x, const CRect & client) {
+        CancelAutomation();
 		const int left = FaderLeft(client), right = FaderRight(client);
 		double t = (right > left) ? (double)(x - left) / (double)(right - left) : 0.5;
 		t = (std::min)(1.0, (std::max)(0.0, t));
@@ -977,6 +1008,8 @@ namespace {
         auto add=[&](CRect r,const wchar_t* fr,const wchar_t* english){if(r.Width()>0 && r.Height()>0)m_tips.push_back({r,en?english:fr});};
         for(int i=0;i<2;++i) {
             const auto L=MakeLayout(i,client);
+            add(L.automation,L"Lecture automatique : enchaînement de cette liste, alternance A/B, durée et courbe du fondu.",L"Automatic playback: this playlist, alternating A/B, fade duration and curve.");
+            add(L.queueOpen,L"Ouvrir la liste de cette platine : glisser des morceaux, reordonner, supprimer. Double-clic pour charger.",L"Open this deck's playlist: drop tracks, reorder, remove. Double-click to load.");
             add(L.release,L"Arr\u00eater et lib\u00e9rer le fichier. Position conserv\u00e9e ; Lecture reprend au m\u00eame endroit. Lib\u00e8re aussi l'autre platine si elle utilise ce fichier.",L"Stop and release the file. Retains position; Play resumes there. Also releases the other deck if it uses this file.");
             add(L.analyse[0],L"Calculer le BPM avec foo_bpm. La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using foo_bpm. Pauses and releases the file for tag writing. Resume after saving the result.");
             add(L.analyse[1],L"Calculer la tonalit\u00e9 avec foo_musical_key. Reprendre la lecture apr\u00e8s la fin de l'analyse et l'enregistrement des tags.",L"Calculate key using foo_musical_key. Resume after analysis and tag writing have finished.");
@@ -1168,6 +1201,19 @@ namespace {
                 dc.SetTextColor(accent);
                 dj_skin::icon(dc,L.analyse[k],k==0?dj_skin::Icon::pulse:k==1?dj_skin::Icon::keySearch:dj_skin::Icon::refresh);
             }
+            for(int line=0;line<2;++line) {
+                int index=line==0?m_queueCurrent[i]:(m_queueCurrent[i]+1);
+                std::wstring text=line==0?(g_english.load()?L"Current: ":L"Actuel : "):(g_english.load()?L"Next: ":L"Suivant : ");
+                if(index>=0 && index<(int)m_queueLabels[i].size())text+=m_queueLabels[i][index];
+                else if(line==0 && !m_savedPath[i].empty())text+=m_name[i];
+                else text+=L"—";
+                FillBox(dc,L.queue[line],RGB(10,15,20));dc.SetTextColor(line? kText:accent);
+                dc.DrawText(text.c_str(),-1,&L.queue[line],DT_NOPREFIX|DT_LEFT|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+            }
+            DrawControl(dc,L.queueOpen,RGB(8,10,14),accent);dc.SetTextColor(kText);
+            dc.DrawText(L"≡",-1,&L.queueOpen,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            DrawControl(dc,L.automation,RGB(8,10,14),accent);dc.SetTextColor(m_alternate||m_chain[i]?accent:kText);
+            dc.DrawText(m_alternate?L"A ↔ B":m_chain[i]?L"AUTO ▶":L"AUTO",-1,&L.automation,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
             DrawControl(dc,L.release,RGB(8,10,14),accent);dj_skin::icon(dc,L.release,dj_skin::Icon::release);
             dc.SetTextColor(kText);
             // Boutons de zoom
@@ -1255,7 +1301,7 @@ namespace {
 			dc.SetTextColor(ready ? kText : kMuted);
 			CRect caption = both;
 			const wchar_t * action = m_cachePlaying[0] && m_cachePlaying[1] ? L"II  Pause A + B" : (!m_cachePlaying[0] && !m_cachePlaying[1] ? Tr(L"\u25b6  Lancer A + B") : Tr(L"\u21c4  Inverser A / B"));
-			dj_skin::icon(dc,caption,m_cachePlaying[0]&&m_cachePlaying[1]?dj_skin::Icon::pause:(!m_cachePlaying[0]&&!m_cachePlaying[1]?dj_skin::Icon::both:dj_skin::Icon::swap));
+			dj_skin::icon(dc,caption,(m_alternate?(m_cachePlaying[0]||m_cachePlaying[1]):(m_cachePlaying[0]&&m_cachePlaying[1]))?dj_skin::Icon::pause:(!m_cachePlaying[0]&&!m_cachePlaying[1]?dj_skin::Icon::both:dj_skin::Icon::swap));
 
 			CRect labelA(strip.left+68, strip.top, left - 4, strip.bottom);
 			CRect labelB(right + 4, strip.top, strip.right-68, strip.bottom);
@@ -1328,7 +1374,9 @@ namespace {
 		for (int i = 0; i < 2; ++i) {
 			const DeckLayout L = MakeLayout(i, rc);
 
-			if(L.release.PtInRect(point)) { if(!m_savedPath[i].empty()) ReleaseForTags(i); Invalidate();return; }
+			if(L.automation.PtInRect(point)) { AutomationMenu(i,point);return; }
+            if(L.queueOpen.PtInRect(point) || L.queue[0].PtInRect(point) || L.queue[1].PtInRect(point)) { OpenQueue(i);return; }
+            if(L.release.PtInRect(point)) { if(!m_savedPath[i].empty()) ReleaseForTags(i); Invalidate();return; }
             if (L.btn[0].PtInRect(point)) { TogglePlay(i); Invalidate(); return; }
 			if (L.btn[1].PtInRect(point)) { SeekDeck(i, 0.0); Invalidate(); return; }
 			if (L.zoomOut.PtInRect(point)) { ZoomDeck(i, false); return; }
@@ -1399,7 +1447,7 @@ namespace {
 		CRect rc;
 		GetClientRect(&rc);
 		if (CRect(FaderLeft(rc)-10,FaderStrip(rc).top,FaderRight(rc)+10,FaderStrip(rc).bottom).PtInRect(point)) {
-			m_crossfade = 0.5f;
+			CancelAutomation(); m_crossfade = 0.5f;
 			Invalidate();
 			return;
 		}
@@ -1516,6 +1564,7 @@ namespace {
     // The external analysis command is asynchronous and has no shared completion API.
     // Keep all readers of this physical file released until the user explicitly plays.
     void CDjPanel::ReleaseForTags(int deck) {
+        CancelAutomation();
         const auto path=m_savedPath[deck];
         for(int i=0;i<2;++i) if(playable_location::path_compare(path.c_str(),m_savedPath[i].c_str())==0) {
             if(m_deck[i].wave) {
@@ -1586,6 +1635,8 @@ namespace {
     }
 
 	void CDjPanel::LoadDeck(int deck, const char * path, t_uint32 subsong) {
+        if(!m_autoChanging)CancelAutomation();
+        m_autoArmed[deck]=false;
 		StopWaveThread(deck);   // l'ancienne analyse n'a plus d'interet
 		m_view[deck] = 0.0;     // on repart en vue complete
         m_waveNeedsRebuild[deck]=false;
@@ -1722,18 +1773,26 @@ namespace {
 	}
 
 	void CDjPanel::SaveSession() {
-		if (m_restoring || (m_savedPath[0].empty() && m_savedPath[1].empty())) return;
+		if (m_restoring) return;
 		picojson::array items;
-		std::lock_guard<std::mutex> lock(m_lock);
 		for (int i = 0; i < 2; ++i) {
 			picojson::object item;
+			item["autoChain"]=picojson::value(m_chain[i]);
+            item["fadeSeconds"]=picojson::value(m_fadeSeconds);
+            item["linearFade"]=picojson::value(m_linearFade.load());
+            // Alternation is deliberately not armed on restart: explicit opt-in each session.
+            item["queue"] = dj_queue::encode(m_queue[i]);
+            item["queueCurrent"] = picojson::value(double(m_queueCurrent[i]));
 			item["path"] = picojson::value(m_savedPath[i]);
 			item["subsong"] = picojson::value((double)m_savedSubsong[i]);
 			item["fixedPitch"] = picojson::value(m_fixedPitch[i].load());
 			item["speed"] = picojson::value(m_speed[i].load());
             item["speedRange"] = picojson::value((double)m_speedRange[i].load());
             item["transpose"] = picojson::value((double)m_transpose[i].load());
-			item["position"] = picojson::value(m_outRate ? (double)m_deck[i].framesPlayed / m_outRate : 0.0);
+			// Only the position snapshot needs the audio lock; JSON and disk writes do not.
+            double position=0;
+            {std::lock_guard<std::mutex> lock(m_lock);position=m_outRate ? (double)m_deck[i].framesPlayed/m_outRate : 0.0;}
+            item["position"] = picojson::value(position);
 			items.push_back(picojson::value(item));
 		}
 		const std::string text = picojson::value(items).serialize();
@@ -1762,7 +1821,13 @@ namespace {
 		for (int i = 0; i < 2; ++i) {
 			const auto & item = items[i];
 			if (!item.is<picojson::object>()) continue;
-			const auto & path = item.get("path"), &subsong = item.get("subsong"), &position = item.get("position");
+			const auto& chain=item.get("autoChain");if(chain.is<bool>())m_chain[i]=chain.get<bool>();
+            const auto& fade=item.get("fadeSeconds");if(fade.is<double>()&&std::isfinite(fade.get<double>()))m_fadeSeconds=(std::max)(0.0,(std::min)(30.0,fade.get<double>()));
+            const auto& linear=item.get("linearFade");if(linear.is<bool>())m_linearFade=linear.get<bool>();
+            m_queue[i]=dj_queue::decode(item.get("queue"));
+            const auto& current=item.get("queueCurrent");
+            if(current.is<double>() && current.get<double>()>=0 && current.get<double>()<m_queue[i].size() && std::floor(current.get<double>())==current.get<double>())m_queueCurrent[i]=(int)current.get<double>();
+            const auto & path = item.get("path"), &subsong = item.get("subsong"), &position = item.get("position");
 			if (!path.is<std::string>() || !subsong.is<double>()) continue;
 			const std::string file = path.get<std::string>(); const double sub = subsong.get<double>();
 			if (file.empty() || file.size() > 32768 || file.find('\0') != std::string::npos || !std::isfinite(sub) || sub < 0 || sub > 4294967295.0 || std::floor(sub) != sub) continue;
@@ -1776,10 +1841,12 @@ namespace {
             if(range.is<double>() && (range.get<double>()==8 || range.get<double>()==16 || range.get<double>()==50)) m_speedRange[i]=(int)range.get<double>();
             const auto & speed = item.get("speed");
 			if (speed.is<double>() && std::isfinite(speed.get<double>())) m_speed[i] = dj_tempo::clamp(speed.get<double>(),m_speedRange[i].load());
-			LoadDeck(i, file.c_str(), (t_uint32)sub);
+            if(!item.get("queue").is<picojson::array>()){m_queue[i].push_back({file,(unsigned)sub});m_queueCurrent[i]=0;}
+            LoadDeck(i, file.c_str(), (t_uint32)sub);
 			if (position.is<double>() && std::isfinite(position.get<double>()) && position.get<double>() > 0) SeekDeck(i, position.get<double>());
 		}
 		m_restoring = false;
+		UpdateQueue(0);UpdateQueue(1);
 		Invalidate();
 		return 0;
 	}
@@ -1971,19 +2038,225 @@ namespace {
 		m_dropHover = -1;
 		DWORD result = DROPEFFECT_NONE;
 		if (obj && deck >= 0) {
-			pfc::string8 path;
-			t_uint32 subsong = 0;
-			if (ExtractFirstItem(obj, path, subsong)) {
-				LoadDeck(deck, path.get_ptr(), subsong);   // si on depose plusieurs morceaux, on charge le premier
-				result = DROPEFFECT_COPY;
-			}
+            AddQueue(deck,obj,m_queue[deck].size());
+            result=DROPEFFECT_COPY;
 		}
 		if (effect) *effect = result;
 		Invalidate();
 		return S_OK;
 	}
 
+
+    std::wstring CDjPanel::QueueLabel(const dj_queue::Item& item) {
+        // Cached metadata only: listing a queue must never open a decoder or file.
+        try {
+            auto h=metadb::get()->handle_create(item.path.c_str(),item.subsong);
+            file_info_impl info;
+            if(h->get_info(info)) {
+                auto title=info.meta_get("TITLE",0);auto artist=info.meta_get("ARTIST",0);
+                if(title&&*title){std::wstring label=pfc::stringcvt::string_wide_from_utf8(title).get_ptr();
+                    if(artist&&*artist){label+=L" — ";label+=pfc::stringcvt::string_wide_from_utf8(artist).get_ptr();}return label;}
+            }
+        }catch(...){}
+        auto n=item.path.find_last_of("/\\");std::string name=n==std::string::npos?item.path:item.path.substr(n+1);
+        std::wstring label=pfc::stringcvt::string_wide_from_utf8(name.c_str()).get_ptr();
+        if(item.subsong)label+=L" ["+std::to_wstring(item.subsong)+L"]";return label;
+    }
+    void CDjPanel::UpdateQueue(int deck,const std::vector<size_t>& selected) {
+        auto& cached=m_queueLabels[deck];cached.clear();
+        for(auto& item:m_queue[deck])cached.push_back(QueueLabel(item));
+        if(m_queueWindow[deck].m_hWnd) {
+            std::vector<std::wstring> labels;size_t n=0;
+            for(auto& item:cached){auto label=std::to_wstring(n+1)+L". "+item;if((int)n==m_queueCurrent[deck])label=L"▶ "+label;labels.push_back(label);++n;}
+            m_queueWindow[deck].refresh(labels,selected);
+        }Invalidate();
+    }
+    void CDjPanel::OpenQueue(int deck) {
+        auto& window=m_queueWindow[deck];
+        window.accepts=[this](IDataObject* o){return CanAccept(o);};
+        window.dropped=[this,deck](IDataObject* o,size_t before){AddQueue(deck,o,before);};
+        window.action=[this,deck](int a,std::vector<size_t> s,size_t b){QueueAction(deck,a,s,b);};
+        window.open(m_hWnd,deck,g_english.load());
+        UpdateQueue(deck,m_queueCurrent[deck]>=0?std::vector<size_t>{(size_t)m_queueCurrent[deck]}:std::vector<size_t>{});
+    }
+    void CDjPanel::QueueAction(int deck,int action,std::vector<size_t> selected,size_t before) {
+        auto& queue=m_queue[deck];if(selected.empty())return;
+        selected.erase(std::remove_if(selected.begin(),selected.end(),[&](size_t n){return n>=queue.size();}),selected.end());if(selected.empty())return;
+        std::sort(selected.begin(),selected.end());
+        if(action==0) {auto item=queue[selected[0]];m_queueCurrent[deck]=(int)selected[0];LoadDeck(deck,item.path.c_str(),item.subsong);}
+        else if(action==1) {
+            int old=m_queueCurrent[deck];
+            if(old>=0){if(std::find(selected.begin(),selected.end(),(size_t)old)!=selected.end())m_queueCurrent[deck]=-1;
+                else m_queueCurrent[deck]-=(int)std::count_if(selected.begin(),selected.end(),[&](size_t n){return n<(size_t)old;});}
+            dj_queue::erase(queue,selected);selected.clear();
+        } else {
+            if(action==2)before=selected.front()?selected.front()-1:0;
+            if(action==3)before=(std::min)(queue.size(),selected.back()+2);
+            // Track the active occurrence, even when identical paths appear more than once.
+            std::vector<dj_queue::Item> indices;for(size_t n=0;n<queue.size();++n)indices.push_back({std::to_string(n),0});
+            dj_queue::move(indices,selected,before);
+            int old=m_queueCurrent[deck];if(old>=0)for(size_t n=0;n<indices.size();++n)if(indices[n].path==std::to_string(old))m_queueCurrent[deck]=(int)n;
+            selected=dj_queue::move(queue,selected,before);
+        }
+        SaveSession();UpdateQueue(deck,selected);
+    }
+    void CDjPanel::AddQueue(int deck,IDataObject* object,size_t before) {
+        auto items=ExtractItems(object);if(items.empty())return;
+        auto& queue=m_queue[deck];before=(std::min)(before,queue.size());
+        if(queue.size()+items.size()>10000){MessageBox(g_english.load()?L"Maximum 10000 tracks per deck.":L"Maximum 10000 morceaux par platine.",L"DJ Decks",MB_OK);return;}
+        auto candidate=queue;candidate.insert(candidate.begin()+before,items.begin(),items.end());
+        if(dj_queue::encode(candidate).serialize().size()+dj_queue::encode(m_queue[1-deck]).serialize().size()>3*1024*1024) {
+            MessageBox(g_english.load()?L"Playlist storage limit reached (3 MiB).":L"Limite de sauvegarde des listes atteinte (3 Mio).",L"DJ Decks",MB_OK);return;
+        }
+        if(m_queueCurrent[deck]>=(int)before)m_queueCurrent[deck]+=(int)items.size();
+        queue.insert(queue.begin()+before,items.begin(),items.end());
+        if(m_savedPath[deck].empty()){m_queueCurrent[deck]=(int)before;auto item=queue[before];LoadDeck(deck,item.path.c_str(),item.subsong);}
+        SaveSession();UpdateQueue(deck);
+    }
+    std::vector<dj_queue::Item> CDjPanel::ExtractItems(IDataObject* object) {
+        std::vector<dj_queue::Item> items;
+        if(!object)return items;
+        // Prefer native foobar handles (including all subsongs) when available.
+        try {pfc::com_ptr_t<IDataObject> obj(object);metadb_handle_list handles;
+            if(SUCCEEDED(ole_interaction::get()->parse_dataobject_immediate(obj,handles)) && handles.get_count()) {
+                for(t_size n=0;n<handles.get_count()&&n<10001;++n)items.push_back({handles[n]->get_path(),handles[n]->get_subsong_index()});return items;
+            }
+        }catch(...){}
+        FORMATETC fmt={CF_UNICODETEXT,nullptr,DVASPECT_CONTENT,-1,TYMED_HGLOBAL};STGMEDIUM medium={};
+        if(SUCCEEDED(object->GetData(&fmt,&medium))) {
+            if(medium.tymed==TYMED_HGLOBAL&&medium.hGlobal) {
+                auto bytes=GlobalSize(medium.hGlobal);
+                if(bytes>=2&&bytes<=16*1024*1024&&bytes%2==0){auto text=(const wchar_t*)GlobalLock(medium.hGlobal);
+                    if(text){size_t len=0;while(len<bytes/2&&text[len])++len;
+                        if(len<bytes/2){std::string utf=pfc::stringcvt::string_utf8_from_wide(text,len).get_ptr();
+                            std::string path;unsigned sub;
+                            if(dj_drop::parse(utf,path,sub)) {auto start=utf.find('\n');picojson::value root;
+                                if(picojson::parse(root,utf.substr(start+1)).empty())items=dj_queue::decode(root.get("items"),10001);}
+                        }GlobalUnlock(medium.hGlobal);}
+                }
+            }ReleaseStgMedium(&medium);if(!items.empty())return items;
+        }
+        fmt.cfFormat=CF_HDROP;medium={};
+        if(SUCCEEDED(object->GetData(&fmt,&medium))) {
+            if(medium.tymed==TYMED_HGLOBAL&&medium.hGlobal){auto count=DragQueryFileW((HDROP)medium.hGlobal,0xFFFFFFFF,nullptr,0);
+                for(UINT n=0;n<count&&n<10001;++n){auto len=DragQueryFileW((HDROP)medium.hGlobal,n,nullptr,0);if(!len||len>32768)continue;
+                    std::vector<wchar_t> file(len+1);DragQueryFileW((HDROP)medium.hGlobal,n,file.data(),len+1);
+                    if(GetFileAttributesW(file.data())&FILE_ATTRIBUTE_DIRECTORY)continue;
+                    items.push_back({std::string("file://")+pfc::stringcvt::string_utf8_from_wide(file.data()).get_ptr(),0});}
+            }ReleaseStgMedium(&medium);
+        }return items;
+    }
+
+
+    // Automatic playback control stays on the UI thread. Decoding/mixing remains on the audio thread.
+    void CDjPanel::CancelAutomation() {
+        if(m_autoChanging)return;
+        bool changed=m_alternate;m_alternate=false;
+        {std::lock_guard<std::mutex> lock(m_lock);m_autoFade={};}
+        if(changed&&!m_restoring)SaveSession();
+    }
+    bool CDjPanel::NextQueue(int deck,bool play) {
+        int next=m_queueCurrent[deck]+1;
+        if(next<0||next>=(int)m_queue[deck].size())return false;
+        auto item=m_queue[deck][next];m_queueCurrent[deck]=next;
+        m_autoChanging=true;LoadDeck(deck,item.path.c_str(),item.subsong);m_autoChanging=false;
+        bool ok=false;
+        {std::lock_guard<std::mutex> lock(m_lock);auto& d=m_deck[deck];
+         ok=d.loaded&&d.helper&&m_error[deck].empty();if(ok)d.playing=play;}
+        UpdateQueue(deck);SaveSession();if(ok&&play)EnsureEngine();return ok;
+    }
+    void CDjPanel::AutomationMenu(int deck,CPoint point) {
+        HMENU menu=CreatePopupMenu(),duration=CreatePopupMenu(),curve=CreatePopupMenu();bool en=g_english.load();
+        AppendMenuW(menu,MF_STRING|(!m_chain[deck]&&!m_alternate?MF_CHECKED:0),1,en?L"Manual":L"Manuel");
+        AppendMenuW(menu,MF_STRING|(m_chain[deck]?MF_CHECKED:0),2,en?L"Auto-next on this deck":L"Enchaîner cette liste");
+        AppendMenuW(menu,MF_STRING|(m_alternate?MF_CHECKED:0),3,en?L"Alternate A / B from this deck":L"Alterner A / B depuis cette platine");
+        const int seconds[]={0,1,2,3,5,8,10,15,20,30};
+        for(int n=0;n<10;++n){auto label=std::to_wstring(seconds[n])+L" s";AppendMenuW(duration,MF_STRING|(m_fadeSeconds==seconds[n]?MF_CHECKED:0),100+n,label.c_str());}
+        AppendMenuW(menu,MF_POPUP,(UINT_PTR)duration,en?L"A/B crossfade duration":L"Durée du fondu A/B");
+        AppendMenuW(curve,MF_STRING|(!m_linearFade.load()?MF_CHECKED:0),200,en?L"Equal power":L"Puissance constante");
+        AppendMenuW(curve,MF_STRING|(m_linearFade.load()?MF_CHECKED:0),201,en?L"Linear":L"Linéaire");
+        AppendMenuW(menu,MF_POPUP,(UINT_PTR)curve,en?L"Crossfader curve":L"Courbe du crossfader");
+        ClientToScreen(&point);auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,m_hWnd,nullptr);DestroyMenu(menu);
+        if(choice==1){CancelAutomation();m_chain[deck]=false;}
+        if(choice==2){CancelAutomation();m_chain[deck]=true;}
+        if(choice==3){
+            CancelAutomation();m_chain[0]=m_chain[1]=false;m_autoActive=deck;
+            {std::lock_guard<std::mutex> lock(m_lock);
+             for(int i=0;i<2;++i)m_altAvailable[i]=m_deck[i].loaded&&m_deck[i].helper&&m_error[i].empty();
+             m_deck[1-deck].playing=false;m_crossfade=(float)deck;}
+            // Released files remain released; opt-in must not reopen a file being tagged.
+            if(m_altAvailable[0]&&m_altAvailable[1])m_alternate=true;
+            else MessageBox(en?L"Load a playable track on each deck first. Released files must be resumed explicitly.":L"Chargez un morceau lisible sur chaque platine. Reprenez explicitement les fichiers libérés.",L"DJ Decks",MB_OK|MB_ICONINFORMATION);
+        }
+        if(choice>=100&&choice<110)m_fadeSeconds=seconds[choice-100];
+        if(choice==200||choice==201)m_linearFade=choice==201;
+        m_pressedButton.SetRectEmpty();::ReleaseCapture();SaveSession();Invalidate();
+    }
+    void CDjPanel::AutomationTick() {
+        if(m_restoring||m_autoChanging)return;
+        struct State{bool playing=false,ended=false,usable=false;double remaining=-1;};State state[2];dj_auto::Fade fade;
+        {std::unique_lock<std::mutex> lock(m_lock,std::try_to_lock);if(!lock.owns_lock())return;
+         fade=m_autoFade;
+         for(int i=0;i<2;++i){auto& d=m_deck[i];state[i].playing=d.playing;
+             state[i].usable=d.loaded&&d.helper&&m_error[i].empty();
+             state[i].ended=state[i].usable&&d.eof&&!d.playing&&d.pendingFrames()==0;
+             state[i].remaining=dj_auto::remaining(d.length,m_outRate?d.framesPlayed/m_outRate:0,m_speed[i].load());
+         }}
+        for(int i=0;i<2;++i)if(state[i].playing)m_autoArmed[i]=true;
+        if(!m_alternate) {
+            for(int i=0;i<2;++i)if(m_chain[i]&&m_autoArmed[i]&&state[i].ended){
+                m_autoArmed[i]=false;
+                if(!NextQueue(i,true)){
+                    bool error=false;{std::lock_guard<std::mutex> lock(m_lock);error=!m_error[i].empty();}
+                    if(error){m_chain[i]=false;SaveSession();}
+                }
+            }
+            return;
+        }
+        if(fade.finished){
+            {std::lock_guard<std::mutex> lock(m_lock);m_autoFade={};}
+            m_autoActive=fade.to;m_autoArmed[fade.from]=false;
+            m_altAvailable[fade.from]=NextQueue(fade.from,false);return;
+        }
+        if(fade.active){
+            if(!state[fade.to].usable||state[fade.to].ended){
+                m_crossfade=(float)fade.from;CancelAutomation();
+            }
+            return;
+        }
+        int from=m_autoActive,to=1-from;
+        if(!state[from].usable){CancelAutomation();return;}
+        if(!m_altAvailable[to]) {
+            if(state[to].usable && m_queueCurrent[to]+1<(int)m_queue[to].size()) {
+                m_altAvailable[to]=NextQueue(to,false);return;
+            }
+            // If one playlist is exhausted, finish the remaining playlist without replaying tracks.
+            if(state[from].ended&&m_autoArmed[from]){m_autoArmed[from]=false;if(!NextQueue(from,true))CancelAutomation();}
+            return;
+        }
+        if(!state[to].usable){CancelAutomation();return;}
+        bool end=m_autoArmed[from]&&state[from].ended;
+        if(!end && !(state[from].playing&&state[from].remaining>=0&&state[from].remaining<=m_fadeSeconds))return;
+        double seconds=end?0:(std::min)(m_fadeSeconds,state[from].remaining);
+        if(state[to].remaining>=0)seconds=(std::min)(seconds,state[to].remaining);
+        {std::lock_guard<std::mutex> lock(m_lock);
+         auto& incoming=m_deck[to];
+         if(incoming.eof&&incoming.pendingFrames()==0){m_altAvailable[to]=false;return;}
+         incoming.playing=true;m_autoArmed[to]=true;
+         m_autoFade.begin(from,m_crossfade.load(),seconds,m_outRate);
+         if(!m_autoFade.active){m_crossfade=(float)to;m_deck[from].playing=false;}
+        }
+        EnsureEngine();Invalidate();
+    }
+
 	void CDjPanel::TogglePlay(int deck) {
+        if(m_alternate&&!m_autoChanging) {
+            {std::lock_guard<std::mutex> lock(m_lock);
+             if(m_deck[0].playing||m_deck[1].playing){m_deck[0].playing=m_deck[1].playing=false;return;}
+             if(m_autoFade.active){m_deck[0].playing=m_deck[1].playing=true;EnsureEngine();return;}
+             m_autoActive=deck;m_crossfade=(float)deck;
+            }
+        }
         if(!ReopenAfterTags(deck)) return;
 		std::lock_guard<std::mutex> lock(m_lock);
 		Deck & d = m_deck[deck];
@@ -2022,6 +2295,7 @@ namespace {
 
 	// Toggle both playing flags under one lock so the mixer observes them together.
 	void CDjPanel::PlayBoth() {
+        if(m_alternate){TogglePlay(m_autoActive);return;}
         if(!ReopenAfterTags(0) || !ReopenAfterTags(1)) return;
 		std::lock_guard<std::mutex> lock(m_lock);
 		if (!m_deck[0].loaded || !m_deck[1].loaded) return;
@@ -2050,6 +2324,7 @@ namespace {
 
 	// Saute a l'instant donne (en secondes) du fichier du deck, en lecture ou en pause.
 	void CDjPanel::SeekDeck(int deck, double seconds) {
+        if(!m_autoChanging)CancelAutomation();
 		std::lock_guard<std::mutex> lock(m_lock);
 		Deck & d = m_deck[deck];
 		if (!d.loaded) return;
@@ -2119,8 +2394,7 @@ namespace {
 				const double x = (std::min)(1.0, (std::max)(0.0, (double)m_crossfade.load()));
 				const double v0 = (std::min)(1.0, (std::max)(0.0, (double)m_volume[0].load()));
 				const double v1 = (std::min)(1.0, (std::max)(0.0, (double)m_volume[1].load()));
-				gains[0] = std::cos(x * kHalfPi) * v0 * v0;
-				gains[1] = std::sin(x * kHalfPi) * v1 * v1;
+				dj_auto::gains(x,m_linearFade.load(),gains);gains[0]*=v0*v0;gains[1]*=v1*v1;
 			};
 			double prevGain[2];
 			computeGains(prevGain);
@@ -2174,7 +2448,12 @@ namespace {
 						}
 					}
 
-					// 3. Mixage : chaque deck est multiplie par son gain (crossfader x volume).
+					// The fade clock follows produced audio, so output stalls and pause cannot run it ahead.
+                    if(m_autoFade.active && frames>0 && m_deck[m_autoFade.to].playing) {
+                        m_crossfade=(float)m_autoFade.advance(frames,true);
+                    }
+                    computeGains(targetGain);
+                    // 3. Mixage : chaque deck est multiplie par son gain (crossfader x volume).
 					// Le gain evolue en douceur du bloc precedent vers le nouveau (pas de craquements).
 					if (frames > 0) {
 						mix.assign(frames * kOutChannels, (audio_sample)0);
@@ -2193,7 +2472,8 @@ namespace {
 						}
 					}
 
-					// 4. Menage : decks arrives au bout, tampons vides
+					if(m_autoFade.finished)m_deck[m_autoFade.from].playing=false;
+                    // 4. Menage : decks arrives au bout, tampons vides
 					for (int i = 0; i < 2; ++i) {
 						Deck & d = m_deck[i];
 						if (d.playing && d.eof && d.pendingFrames() == 0) d.playing = false;

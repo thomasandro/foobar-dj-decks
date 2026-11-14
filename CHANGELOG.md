@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.20.0-alpha.1 — 2026-11-14 (public prerelease)
+
+Fifth public alpha, based on 0.20.0-dev. Includes the previously unpublished 0.19.0,
+0.19.1 and 0.20.0 development milestones detailed below. Version/docs packaging
+changes only; the installed development build is not changed by this publication.
+
+- Saved per-deck playlists: Current/Next previews, two independent floating windows,
+  multi-track drops, multi-selection reordering/removal and double-click loading.
+- Floating playlists share dark rows, cyan/orange accents and glossy black buttons.
+- Independent playlist auto-next or alternating A/B; refill the silent deck for the
+  next transition, finish remaining entries if the other playlist is exhausted.
+- Fade duration presets 0–30 seconds; equal-power/linear curve; audio-frame clock
+  pauses with playback/output stalls, with speed-aware end triggering.
+- Manual takeover and released-file/error handling; saved auto-next/fade preferences.
+- User-supplied playlist screenshot in both READMEs and release materials.
+- Thanks to StyxCrosser for the popup-playlist suggestion and earlier interface/file
+  feedback: https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621
+
+Build/native tests passed. Same-deck auto-next is not gapless. Real-host automatic
+transitions, long sessions, clean-profile installation and shutdown/unload still
+need validation. The supplied image illustrates playlists; AUTO controls are not shown.
+
+
+## 0.20.0-dev — local development, not published
+
+- AUTO menu on each deck: independent playlist auto-next or mutually exclusive
+  alternating A/B playback, refilling the silent deck with its next queue entry.
+- Shared crossfade duration presets 0–30 seconds; equal-power or linear curve.
+- Speed-aware end trigger and audio-frame-driven fade, suspended during pause/stalls.
+- Alternating transport pauses/resumes both decks during overlaps; remaining entries
+  finish sequentially if the other playlist is exhausted. No automatic repeat.
+- Manual crossfader/seek/load/release cancels alternation. Released readers remain
+  released, and failed incoming tracks stop automation without repeated retries.
+- Persist independent auto-next, duration and curve; alternation is explicitly armed
+  each session. Actual controller, fade, layout and existing audio regression tests.
+- [Usage and validation limits](docs/AUTOMATIC_PLAYBACK.md): independent auto-next
+  is not gapless, alternating transitions are experimental and need live-host testing.
+
+## 0.19.1-dev — local development, not published
+
+- Floating playlists now share the decks' dark background, glossy cyan/orange rim,
+  black glossy buttons with hover/pressed feedback, Segoe UI and tinted selected rows.
+- Alternating dark rows, accent selection marker, ellipsized titles and keyboard focus.
+- Preserve native multi-selection, drag/drop and keyboard behavior. Button widths adapt
+  to the window. Standard Windows title bar and scrollbar remain.
+- Native offscreen owner-draw tests cover both accent colors, unselected row contrast
+  and distinct pressed button rendering, without accessing or capturing foobar.
+
+## 0.19.0-dev — local development, not published
+
+- Two-line Current/Next playlist preview and black open-list button on each deck.
+- Independent modeless floating playlist windows; both can be open simultaneously.
+- Ordered multi-item drops from native foobar, compatible Smooth Playlist/Browser
+  payloads and Explorer files. Appends on deck drops, inserts at the drop row in lists.
+- Multi-selection drag reordering, Move up/down, Remove/Delete and double-click/Enter
+  loading. Removal affects entries only and does not interrupt the loaded track.
+- Persist both lists, duplicate occurrences, order and subsongs in the existing session.
+  Migrate old loaded tracks; preserve explicitly emptied new lists and offline paths.
+- Save JSON and write/flush session files outside the audio-engine mutex.
+- Added queue-model and hidden native-window regression tests; no foobar access.
+- See [playlist usage and current limits](docs/PLAYLISTS.md). Live-host OLE integration
+  and restart restoration remain pending manual validation. No auto-advance in this build.
+
 ## 0.18.0-alpha.1 — 2026-11-14 (public prerelease)
 
 Fourth public alpha, based on 0.18.0-dev (detailed below), responding to community

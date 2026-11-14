@@ -1,3 +1,17 @@
+# Current validation — 0.20.0-alpha.1
+
+Public x64 rebuild and native tests cover the actual automatic playback controller,
+fade duration/pause/direction/curves, 192 queue reorder cases, serialization, themed
+hidden windows, owner-draw states, layout and 30 synthetic audio cases. No foobar
+host was opened or captured for this publication. The user supplied the screenshot;
+it is illustration, not proof of automated transition validation.
+
+Actual cross-app OLE behavior, real-music transition quality, clean-profile install,
+session restoration under varied profiles, long sessions and shutdown/unload remain
+pending. Same-deck auto-next is not gapless; A/B automatic fades remain experimental.
+
+Previous validation record follows for traceability:
+
 # Validation — 2026-11-14
 
 Release: **0.18.0-alpha.1**, based on locally installed 0.18.0-dev.

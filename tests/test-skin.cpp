@@ -10,7 +10,7 @@ using namespace ATL;
 // Layout extracted from the actual component by the test runner.
 #include "../build/tests/skin-layout.inc"
 int wmain(int argc,wchar_t** argv) {
-    for(auto dims : {SIZE{900,650},SIZE{1280,720},SIZE{1920,1080}}) {
+    for(auto dims : {SIZE{784,614},SIZE{900,650},SIZE{1280,720},SIZE{1920,1080}}) {
         CRect client(0,0,dims.cx,dims.cy);
         assert(FaderStrip(client).Height()<=52);
         assert(PlayBothRect(client).right<FaderLeft(client));
@@ -19,6 +19,13 @@ int wmain(int argc,wchar_t** argv) {
         for(int deck=0;deck<2;++deck) {
             auto L=MakeLayout(deck,client);
             assert(L.wave.Width()>0 && L.wave.Height()>0);
+            assert(L.queue[0].bottom<=L.queue[1].top);
+            assert(L.queue[1].bottom<L.wave.top);
+            assert(L.queue[0].right<L.queueOpen.left);
+            assert(L.queueOpen.bottom<L.wave.top);
+            assert(L.analyse[0].bottom<L.queue[0].top);
+            assert(L.release.right<L.automation.left);
+            assert(L.automation.right<=L.deck.right);
             for(auto r : {L.btn[0],L.btn[1],L.matchKey,L.pitch[1],L.range,L.key,L.beat,L.sync,L.analyse[0]}) {
                 assert(r.Width()>0 && r.Height()>0);
                 assert(r.left>=L.deck.left && r.right<=L.deck.right);

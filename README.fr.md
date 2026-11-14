@@ -3,27 +3,30 @@
 [English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
-**0.18.0-alpha.1 est une préversion alpha expérimentale.**
+**0.20.0-alpha.1 est une préversion alpha expérimentale.**
 
 ## ⬇ Télécharger l’extension
 
-**[Télécharger DJ Decks 0.18.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.18.0-alpha.1/foo_dj-0.18.0-alpha.1-win-x64.fb2k-component)**
+**[Télécharger DJ Decks 0.20.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.20.0-alpha.1/foo_dj-0.20.0-alpha.1-win-x64.fb2k-component)**
 
 Fichier installable `.fb2k-component` pour foobar2000 2.x x64.
 Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
 
-[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.18.0-alpha.1)
+[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.20.0-alpha.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
 
-![Interface DJ Decks cyan/orange et boutons noirs](docs/images/dj-decks-0.17.1.png)
+![Interface DJ Decks cyan/orange et boutons noirs](docs/images/dj-decks-playlists-0.20.png)
 
-*Capture fournie par l’utilisateur de la 0.17.1-dev. La 0.18.0 ajoute le bandeau compact, les états de survol/appui et les boutons de libération.*
+*Capture fournie par l’utilisateur : fenêtres de playlists assorties aux decks ; menu AUTO non affiché.*
+
+Merci à [StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621)
+pour l’idée des playlists flottantes et ses retours sur l’interface et la libération des fichiers.
 
 ## Fonctions
 
 - Chargement, lecture/pause et positionnement indépendants ; bouton commun pour les deux états.
-- Volumes séparés, crossfader à puissance constante, variations de gain lissées.
+- Volumes séparés, crossfader à puissance constante ou linéaire, variations de gain lissées.
 - Formes d’onde avec zoom, clic pour se déplacer et indication de la partie déjà jouée.
 - Pochettes ; titre et artiste sur deux lignes défilantes ; interface français/anglais.
 - Affichage du BPM renseigné dans les tags ; plages de vitesse au choix : ±8 %, ±16 % ou ±50 %.
@@ -40,7 +43,10 @@ ainsi que les retours reproductibles sont bienvenus.
 - Repères estimés/manuels continus ; grille indicative en pointillés si la détection est incertaine.
 - Réglage manuel de grille, « Temps ici » et retour Auto, mémorisés par fichier/sous-piste.
 - Morceaux et positions restaurés en pause après fermeture normale.
-- Glisser-déposer natif de foobar/Explorateur ; formats WebView2 compatibles facultatifs.
+- Playlists sauvegardées par platine, aperçu Actuel/Suivant et deux fenêtres flottantes assorties aux decks.
+- Dépôt de plusieurs morceaux, réorganisation/suppression multiple et chargement par double-clic. [Guide](docs/PLAYLISTS.md).
+- AUTO : enchaînement indépendant ou alternance A/B, fondus de 0 à 30 s, courbe puissance constante/linéaire. [Utilisation](docs/AUTOMATIC_PLAYBACK.md).
+- Glisser-déposer natif foobar/Explorateur ; formats texte compatibles Smooth Playlist/Browser facultatifs.
 
 ## Installation
 
@@ -50,7 +56,7 @@ ont été faits avec foobar2000 2.26.3 preview du 8 novembre 2026. Les autres ve
 Columns UI n’est fournie.
 
 Pour le premier essai, utiliser un profil portable séparé. Installer
-`foo_dj-0.18.0-alpha.1-win-x64.fb2k-component` via
+`foo_dj-0.20.0-alpha.1-win-x64.fb2k-component` via
 **Préférences → Composants → Installer…**, puis redémarrer. Dans l’édition de disposition
 de Default UI, ajouter **DJ Decks** (Utilitaires). Un grand panneau est préférable ;
 commencer vers 900 × 650 px. WebView2, SMP et Smooth Browser ne sont pas nécessaires. Le composant utilise
@@ -64,7 +70,7 @@ vierge n’ont pas encore été validés. Les scripts créent les paquets locaux
 
 ## Utilisation
 
-Glisser un morceau sur chaque platine ; une sélection multiple charge le premier.
+Glisser des morceaux sur chaque platine ajoute toute la sélection à sa playlist ; une platine vide charge le premier en pause.
 Le bouton commun inverse les deux états : lecture des deux, pause des deux, ou échange
 de la platine en lecture si une seule joue. Régler volumes et crossfader ; aucun
 limiteur de sortie n’est prévu.
@@ -116,3 +122,11 @@ DJ Decks n’ajoute ni télémétrie ni recherche automatique de mises à jour.
 Les rapports utiles précisent les versions, l’architecture, la sortie audio et des
 étapes de reproduction, si possible dans un profil vierge. Ne pas joindre de fichiers
 musicaux ou de sessions personnelles par défaut. [Licences](THIRD_PARTY_NOTICES.md).
+
+### Playlists et lecture automatique
+
+Déposer plusieurs morceaux ajoute toute la sélection à la liste de la platine.
+Sur une platine vide, le premier est chargé en pause. **≡** ou l’aperçu Actuel/Suivant
+ouvre sa fenêtre flottante ; double-clic pour charger, Suppr pour retirer une entrée.
+Le menu **AUTO** règle l’enchaînement ou l’alternance A/B et les fondus. Ces modes
+restent expérimentaux ; l’enchaînement sur une seule platine n’est pas sans coupure.
