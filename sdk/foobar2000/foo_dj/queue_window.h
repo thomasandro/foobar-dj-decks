@@ -13,6 +13,8 @@ public:
     HWND list=nullptr;
     bool english=false;
     int deckIndex=0;
+    static constexpr DWORD windowStyle=WS_POPUP|WS_THICKFRAME|WS_SYSMENU|WS_CLIPCHILDREN;
+    static CRect CloseRect(int width){return CRect(width-46,8,width-10,40);}
     std::vector<size_t> selected() const {
         int count=(int)::SendMessage(list,LB_GETSELCOUNT,0,0);if(count<=0)return {};
         std::vector<int> raw(count);::SendMessage(list,LB_GETSELITEMS,count,(LPARAM)raw.data());
@@ -30,11 +32,12 @@ public:
         english=en;deckIndex=deck;
         std::wstring title=en?L"DJ Decks - Playlist ":L"DJ Decks - Liste ";title+=deck?L"B":L"A";
         if(!m_hWnd){CRect r(100+deck*80,100+deck*60,660+deck*80,500+deck*60);
-            Create(owner,r,title.c_str(),WS_OVERLAPPEDWINDOW,WS_EX_TOOLWINDOW);}
+            Create(owner,r,title.c_str(),windowStyle,WS_EX_TOOLWINDOW);}
         SetWindowText(title.c_str());
         const wchar_t* fr[]={L"Charger",L"Supprimer",L"Monter",L"Descendre"};
         const wchar_t* eng[]={L"Load",L"Remove",L"Move up",L"Move down"};
         for(int n=0;n<4;++n)::SetWindowTextW(buttons[n],en?eng[n]:fr[n]);
+        ::SetWindowTextW(buttons[4],en?L"Close playlist":L"Fermer la playlist");
         ::SetWindowTextW(help,en?L"Drop tracks here. Double-click: load. Delete: remove. Drag: reorder.":L"Deposer ici. Double-clic : charger. Suppr : retirer. Glisser : reordonner.");
         ShowWindow(SW_SHOWNORMAL);SetForegroundWindow(m_hWnd);::SetFocus(list);
     }
@@ -44,6 +47,10 @@ public:
         MSG_WM_CLOSE(OnClose)
         MSG_WM_DESTROY(OnDestroy)
         MSG_WM_GETMINMAXINFO(OnMinMax)
+        MSG_WM_NCHITTEST(OnNcHitTest)
+        MESSAGE_HANDLER(WM_NCCALCSIZE,OnNcCalcSize)
+        MESSAGE_HANDLER(WM_NCPAINT,OnNcPaint)
+        MESSAGE_HANDLER(WM_NCACTIVATE,OnNcActivate)
         MSG_WM_PAINT(OnPaint)
         MSG_WM_ERASEBKGND(OnErase)
         MESSAGE_HANDLER(WM_DRAWITEM,OnDrawItem)
@@ -52,11 +59,24 @@ public:
         MESSAGE_HANDLER(WM_COMMAND,OnCommand)
     END_MSG_MAP()
 private:
-    HWND buttons[4]={},help=nullptr;
+    HWND buttons[5]={},help=nullptr;
     HBRUSH darkBrush=nullptr;
     HFONT font=nullptr;
     int hotButton=-1;
-    COLORREF accent()const{return deckIndex?RGB(245,143,27):RGB(0,194,211);}
+    COLORREF accent()const{return dj_skin::accent(deckIndex);}
+    LRESULT OnNcCalcSize(UINT,WPARAM,LPARAM,BOOL&){return 0;}
+    LRESULT OnNcPaint(UINT,WPARAM,LPARAM,BOOL&){return 0;}
+    LRESULT OnNcActivate(UINT,WPARAM,LPARAM,BOOL&){return TRUE;}
+    LRESULT OnNcHitTest(CPoint screen){
+        CRect r;GetWindowRect(&r);CPoint p(screen.x-r.left,screen.y-r.top);
+        if(p.x<0||p.y<0||p.x>=r.Width()||p.y>=r.Height())return HTNOWHERE;
+        bool left=p.x<6,right=p.x>=r.Width()-6,top=p.y<6,bottom=p.y>=r.Height()-6;
+        if(top)return left?HTTOPLEFT:right?HTTOPRIGHT:HTTOP;
+        if(bottom)return left?HTBOTTOMLEFT:right?HTBOTTOMRIGHT:HTBOTTOM;
+        if(left)return HTLEFT;if(right)return HTRIGHT;
+        if(CloseRect(r.Width()).PtInRect(p))return HTCLIENT;
+        return p.y<46?HTCAPTION:HTCLIENT;
+    }
     static LRESULT CALLBACK ButtonProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data){
         auto self=(DjQueueWindow*)data;
         if(msg==WM_MOUSEMOVE){
@@ -72,6 +92,10 @@ private:
         CPaintDC dc(m_hWnd);CRect r;GetClientRect(&r);
         ::FillRect(dc,&r,darkBrush);dj_skin::surface(dc,r,accent(),true);
         CRect inner=r;inner.DeflateRect(6,6);::FillRect(dc,&inner,darkBrush);
+        CRect header(8,6,r.right-8,44);dj_skin::surface(dc,header,accent());
+        CRect title(20,8,r.right-54,40);std::wstring name=L"Playlist ";name+=deckIndex?L"B":L"A";
+        auto old=::SelectObject(dc,font);::SetBkMode(dc,TRANSPARENT);::SetTextColor(dc,accent());
+        ::DrawTextW(dc,name.c_str(),-1,&title,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);::SelectObject(dc,old);
     }
     LRESULT OnColor(UINT,WPARAM w,LPARAM,BOOL&){
         auto dc=(HDC)w;::SetTextColor(dc,RGB(180,195,210));::SetBkColor(dc,RGB(16,19,25));return (LRESULT)darkBrush;
@@ -81,7 +105,7 @@ private:
         if(item->CtlType==ODT_LISTBOX){
             if(item->itemID==(UINT)-1)return TRUE;
             auto dc=item->hDC;auto r=item->rcItem;bool selected=(item->itemState&ODS_SELECTED)!=0;
-            COLORREF fill=selected?(deckIndex?RGB(82,53,25):RGB(15,65,74)):((item->itemID%2)?RGB(23,28,35):RGB(16,21,28));
+            COLORREF fill=selected?RGB(16+GetRValue(accent())/4,19+GetGValue(accent())/4,25+GetBValue(accent())/4):((item->itemID%2)?RGB(23,28,35):RGB(16,21,28));
             HBRUSH brush=::CreateSolidBrush(fill);::FillRect(dc,&r,brush);::DeleteObject(brush);
             if(selected){RECT bar=r;bar.right=bar.left+3;brush=::CreateSolidBrush(accent());::FillRect(dc,&bar,brush);::DeleteObject(brush);}
             int length=(int)::SendMessage(list,LB_GETTEXTLEN,item->itemID,0);if(length<0)return TRUE;
@@ -96,7 +120,12 @@ private:
             wchar_t label[80]={};::GetWindowTextW(item->hwndItem,label,80);auto r=item->rcItem;
             auto old=::SelectObject(dc,font);::SetBkMode(dc,TRANSPARENT);::SetTextColor(dc,RGB(239,243,247));
             if(item->itemState&ODS_SELECTED)::OffsetRect(&r,0,1);
-            ::DrawTextW(dc,label,-1,&r,DT_SINGLELINE|DT_VCENTER|DT_CENTER|DT_NOPREFIX);
+            if(item->CtlID==105){
+                HPEN pen=::CreatePen(PS_SOLID,2,RGB(239,243,247));auto prior=::SelectObject(dc,pen);
+                int x=(r.left+r.right)/2,y=(r.top+r.bottom)/2;
+                ::MoveToEx(dc,x-5,y-5,nullptr);::LineTo(dc,x+6,y+6);::MoveToEx(dc,x+5,y-5,nullptr);::LineTo(dc,x-6,y+6);
+                ::SelectObject(dc,prior);::DeleteObject(pen);
+            }else ::DrawTextW(dc,label,-1,&r,DT_SINGLELINE|DT_VCENTER|DT_CENTER|DT_NOPREFIX);
             ::SelectObject(dc,old);if(item->itemState&ODS_FOCUS){::InflateRect(&r,-7,-7);::DrawFocusRect(dc,&r);}return TRUE;
         }
         handled=FALSE;return 0;
@@ -171,24 +200,28 @@ private:
         ::SendMessage(list,LB_SETITEMHEIGHT,0,28);
         ::SetWindowSubclass(list,ListProc,1,(DWORD_PTR)this);
         for(int n=0;n<4;++n){buttons[n]=::CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,0,0,m_hWnd,(HMENU)(INT_PTR)(101+n),nullptr,nullptr);::SetWindowSubclass(buttons[n],ButtonProc,1,(DWORD_PTR)this);}
+        buttons[4]=::CreateWindowW(L"BUTTON",english?L"Close playlist":L"Fermer la playlist",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,0,0,m_hWnd,(HMENU)105,nullptr,nullptr);
+        ::SetWindowSubclass(buttons[4],ButtonProc,1,(DWORD_PTR)this);
         help=::CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,0,0,0,0,m_hWnd,nullptr,nullptr,nullptr);
         for(auto h:{list,help,buttons[0],buttons[1],buttons[2],buttons[3]})::SendMessage(h,WM_SETFONT,(WPARAM)font,FALSE);
         target=new Target(this);if(FAILED(::RegisterDragDrop(list,target))){target->Release();target=nullptr;}
         return 0;
     }
     void OnSize(UINT,CSize size){
-        ::MoveWindow(help,8,8,(std::max)(1,(int)size.cx-16),30,TRUE);
-        ::MoveWindow(list,8,40,(std::max)(1,(int)size.cx-16),(std::max)(1,(int)size.cy-88),TRUE);
+        auto close=CloseRect(size.cx);::MoveWindow(buttons[4],close.left,close.top,close.Width(),close.Height(),TRUE);
+        ::MoveWindow(help,8,50,(std::max)(1,(int)size.cx-16),30,TRUE);
+        ::MoveWindow(list,8,82,(std::max)(1,(int)size.cx-16),(std::max)(1,(int)size.cy-130),TRUE);
         int width=((int)size.cx-24)/4;
         for(int n=0;n<4;++n)::MoveWindow(buttons[n],8+n*width,size.cy-43,width-4,36,TRUE);
         Invalidate(FALSE);
     }
     void OnClose(){ShowWindow(SW_HIDE);}
-    void OnMinMax(MINMAXINFO* info){info->ptMinTrackSize.x=480;info->ptMinTrackSize.y=220;}
+    void OnMinMax(MINMAXINFO* info){info->ptMinTrackSize.x=480;info->ptMinTrackSize.y=240;}
     void OnDestroy(){if(target){::RevokeDragDrop(list);target->window=nullptr;target->Release();target=nullptr;}::RemoveWindowSubclass(list,ListProc,1);for(auto h:buttons)::RemoveWindowSubclass(h,ButtonProc,1);list=nullptr;if(font){::DeleteObject(font);font=nullptr;}if(darkBrush){::DeleteObject(darkBrush);darkBrush=nullptr;}}
     LRESULT OnCommand(UINT,WPARAM w,LPARAM,BOOL&) {
         if(LOWORD(w)==100 && HIWORD(w)==LBN_DBLCLK){if(action)action(0,selected(),0);}
         else if(LOWORD(w)>=101&&LOWORD(w)<=104){if(action)action(LOWORD(w)-101,selected(),0);}
+        else if(LOWORD(w)==105)OnClose();
         return 0;
     }
 };

@@ -1,5 +1,129 @@
 # Changelog
 
+## 0.24.0-alpha.1 — 2026-11-14 (public prerelease)
+
+Sixth public alpha, based on 0.24.0-dev. Includes every previously unpublished
+milestone from 0.20.1 through 0.24.0, detailed below. Public version/packaging
+changes do not replace the locally installed development component.
+
+- Four local stems: drums, bass, instruments and vocals; independent mute,
+  0–100% gain and additive Solo on each deck, with smooth level transitions.
+- External Demucs worker with progress, cancellation and persistent validated cache.
+  NVIDIA CUDA is preferred automatically; GPU detection/inference errors retry on CPU.
+  Optional Python engine installer is supplied separately; no audio is uploaded.
+- BPM matching and beat SYNC consider half/double equivalents as well as exact BPM,
+  selecting the closest valid speed in the chosen range; exact wins ties.
+- Glossy/Flat themes, eight deck colors, saved settings, corrected status clipping,
+  clearer BPM/key analysis and matching icons, dedicated gear Settings menu.
+- Floating playlists have integrated themed titles/close controls and retain resize,
+  title dragging, keyboard actions and saved list contents.
+- Updated French/English READMEs, direct downloads, installation guide and supplied
+  screenshot. Thanks to StyxCrosser for sustained testing and interface suggestions.
+
+Validation: release x64 build/native suite, 60 real audio-processing cases,
+256 stem mute/solo combinations, actual CUDA preparation/cache/cancellation and
+real CPU preparation after simulated CUDA failure. GTX 1070 Ti synthetic 30-second
+benchmark (three runs): 53.04 s CPU/two threads vs 3.01 s CUDA median preparation.
+First result including process initialization: 73.98 s CPU vs 13.92 s CUDA.
+This is an offline preparation benchmark, not real-time playback or listening validation.
+Separation remains approximate and completes before activation; cache has no automatic
+eviction. The release remains experimental/unsigned and Windows x64 / Default UI only.
+
+## 0.24.0-dev — local development, not published
+
+- Stem preparation automatically uses NVIDIA CUDA when available, with the same
+  htdemucs model, float32 precision and separation settings as the CPU engine.
+- CUDA detection failure, insufficient GPU memory, kernel/driver errors or invalid
+  GPU samples trigger one retry using a fresh CPU model. CPU failures remain errors;
+  partial results are never published. Backend and fallback reasons are logged.
+- The optional installer selects PyTorch 2.5.1 CUDA 11.8 for detected NVIDIA GPUs,
+  with a CPU package fallback on installation failure and an explicit -CPUOnly option.
+  Existing CPU-only installations continue to work; rerun the installer to enable CUDA.
+- Cache identity stays unchanged: existing stems remain usable. Playback, stem
+  levels, Solo and source music are unchanged; preparation still completes before use.
+- GTX 1070 Ti benchmark on a synthetic 30-second excerpt: median preparation
+  53.04 s CPU (two threads) versus 3.01 s CUDA over three runs; not a live-DJ guarantee.
+
+## 0.23.2-dev — local development, not published
+
+- Replace the FR/EN footer label with a vector gear and bilingual Settings tooltip.
+- Settings groups Language in its own submenu alongside Theme and Deck A/B colors.
+- Existing saved preferences are retained; no audio or playback changes.
+
+## 0.23.1-dev — local development, not published
+
+- More explicit BPM/key pictograms inspired by StyxCrosser's musical-symbol suggestion:
+  musical note + BPM, flat mark + KEY for analysis; magnifier denotes calculation.
+- BPM/key matching use a musical mark + equals sign and BPM/KEY label, distinguishing
+  matching from analysis. Existing bilingual action tooltips remain in place.
+- Musical marks are vector-drawn, independent of Unicode music font availability;
+  glyph render tests check distinctness at small/large sizes in both themes.
+- No audio behavior changes. No foobar capture, monitoring or launch for verification.
+
+## 0.23.0-dev — local development, not published
+
+- FR/EN options menu now includes Glossy or Flat/subdued theme and independent
+  deck color selections: cyan, orange, blue, purple, green, rose/red, gold and grey.
+- Theme and palette choices persist with foobar configuration and apply to decks,
+  waveforms, floating playlist headers, buttons and selection colors immediately.
+- Flat mode uses a neutral dark backdrop and subtle accent borders, without glossy
+  gradients, reflections or shadows; hover and pressed feedback remain distinct.
+- Deck status text uses measured glyph width, extra right padding and a separate
+  title rectangle. Long headings use ellipsis rather than overlapping status text.
+- Native tests cover palette routing, both themes/states and FR/EN status fit at
+  several font sizes and panel widths, without any host/window capture.
+
+## 0.22.0-dev — local development, not published
+
+- Auto BPM compares the other deck's effective BPM at ×1, ×½ and ×2. Choose the
+  in-range candidate closest to the destination's current speed; exact wins ties.
+- Both BPM matching and beat SYNC use this selection. SYNC aligns against the
+  corresponding virtual reference grid, retaining its original phase anchor.
+- Speed labels show ½×A/B or 2×A/B while the effective BPMs have that relationship.
+  Tags, waveforms and saved manual grids are not rewritten.
+- Tests cover both directions, adjusted reference speed, all ranges, ties, outside
+  candidates, invalid values and continued half/double phase alignment over time.
+
+## 0.21.1-dev — local development, not published
+
+- Per-stem 0–100% volume and Solo on both decks: drag/wheel for level, right-click
+  resets to 100%; Shift+wheel for finer steps. Multiple solos can be combined.
+- Solo temporarily overrides mutes without destroying the prior mute mask or levels.
+  Clearing solos restores the previous mix. New tracks reset levels and solos;
+  Original clears solos, while Enable all four also clears solos explicitly.
+- Smooth gain ramps before SoundTouch, no cache/model change or additional inference.
+- Native tests cover all 256 mute/solo combinations with varied gains, zero/invalid
+  levels, deck independence, restoring mutes, control geometry and existing audio cases.
+
+## 0.21.0-dev — local development, not published
+
+- Local four-stem preparation: drums, bass, other instruments and vocals, with
+  progress/cancellation and a reusable source/subsong/version-keyed cache.
+- Per-deck STEMS menu and four on/off buttons; explicit all-stems/original selection.
+- Float PCM streams share one clock and mix before the existing SoundTouch path.
+  Preserve speed, pitch/key lock, seek/SYNC, volume and crossfade; smooth mute ramps.
+- External isolated Demucs 4.0.1/htdemucs CPU worker; no AI libraries in the host.
+  Atomic complete-cache publication, bounded validation, source-change checks,
+  one job at a time, own-process lifetime job and restricted handle inheritance.
+- Cancel preparation on source change/release/unload; do not reopen tagged/released files.
+  Local input export uses installed foobar decoders and retains subsong identity.
+- Installer for an optional dedicated engine; no source music modification/upload.
+- Native cache/mask tests, 60 actual audio cases and real external-model integration
+  on synthetic stereo audio. See [stems usage and limits](docs/STEMS.md).
+- First version: CPU only, 30-minute/1-GiB export limits, no automatic cache eviction,
+  no stem solo/gain, and original audio on newly loaded tracks. Live-host checks pending.
+
+## 0.20.1-dev — local development, not published
+
+- Replace the floating playlists' Windows title/frame with an integrated glossy
+  black header, cyan/orange Playlist A/B title and matching hover/pressed close button.
+- Preserve title dragging, all eight edge/corner resize directions, minimum size
+  and standard system close. The close button hides the window without clearing
+  entries or invoking any deck/audio action.
+- Hidden-window regression tests cover caption-free styles, resize/title hit tests,
+  header/list separation and close-button preservation of list contents.
+- No foobar host was accessed or captured; live-host appearance remains to be checked.
+
 ## 0.20.0-alpha.1 — 2026-11-14 (public prerelease)
 
 Fifth public alpha, based on 0.20.0-dev. Includes the previously unpublished 0.19.0,

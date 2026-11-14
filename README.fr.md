@@ -3,22 +3,22 @@
 [English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
-**0.20.0-alpha.1 est une préversion alpha expérimentale.**
+**0.24.0-alpha.1 est une préversion alpha expérimentale.**
 
 ## ⬇ Télécharger l’extension
 
-**[Télécharger DJ Decks 0.20.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.20.0-alpha.1/foo_dj-0.20.0-alpha.1-win-x64.fb2k-component)**
+**[Télécharger DJ Decks 0.24.0-alpha.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-0.24.0-alpha.1-win-x64.fb2k-component)**
 
 Fichier installable `.fb2k-component` pour foobar2000 2.x x64.
 Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
 
-[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.20.0-alpha.1)
+[Télécharger l’alpha et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.24.0-alpha.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
 
-![Interface DJ Decks cyan/orange et boutons noirs](docs/images/dj-decks-playlists-0.20.png)
+![DJ Decks : stems, couleurs personnalisées et playlist flottante](docs/images/dj-decks-stems-0.24.png)
 
-*Capture fournie par l’utilisateur : fenêtres de playlists assorties aux decks ; menu AUTO non affiché.*
+*Capture fournie par l’utilisateur de l’interface 0.24 : stems, couleurs des platines et titre de playlist intégré.*
 
 Merci à [StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621)
 pour l’idée des playlists flottantes et ses retours sur l’interface et la libération des fichiers.
@@ -33,13 +33,13 @@ pour l’idée des playlists flottantes et ses retours sur l’interface et la l
 - Mode vinyle ou tempo avec tonalité préservée par SoundTouch.
 - Transposition indépendante de −12 à +12 demi-tons, sans modifier le tempo.
 - Calage harmonique automatique : même tonalité ou relative compatible, transposition la plus proche.
-- Coque brillante cyan/orange, boutons noirs avec retour visuel au survol/clic et infobulles bilingues.
-- Bandeau inférieur compact : transport commun, crossfader et menu FR/EN.
+- Thème brillant ou plat/sobre, huit couleurs indépendantes par platine, boutons noirs avec survol/clic et infobulles. [Apparence](docs/APPEARANCE.md).
+- Bandeau inférieur compact : transport commun, crossfader et engrenage Réglages (langue, thème et couleurs).
 - Bouton Arrêter/libérer par platine ; Lecture rouvre le fichier à la position conservée.
 - Tonalité Camelot et classique, par exemple 8A (Am), avec indicateur de compatibilité coloré.
 - Calcul BPM/tonalité via les composants facultatifs foo_bpm / foo_musical_key,
   actualisation sans recharger le son. [Détails](docs/DECK_ANALYSIS.md).
-- Égalisation des BPM ; premier calage ponctuel des battements, expérimental.
+- Calage BPM et SYNC avec équivalents moitié/double : vitesse admissible la plus proche. [Détails](docs/TEMPO_MATCHING.md).
 - Repères estimés/manuels continus ; grille indicative en pointillés si la détection est incertaine.
 - Réglage manuel de grille, « Temps ici » et retour Auto, mémorisés par fichier/sous-piste.
 - Morceaux et positions restaurés en pause après fermeture normale.
@@ -47,6 +47,20 @@ pour l’idée des playlists flottantes et ses retours sur l’interface et la l
 - Dépôt de plusieurs morceaux, réorganisation/suppression multiple et chargement par double-clic. [Guide](docs/PLAYLISTS.md).
 - AUTO : enchaînement indépendant ou alternance A/B, fondus de 0 à 30 s, courbe puissance constante/linéaire. [Utilisation](docs/AUTOMATIC_PLAYBACK.md).
 - Glisser-déposer natif foobar/Explorateur ; formats texte compatibles Smooth Playlist/Browser facultatifs.
+
+- **Séparation locale en quatre stems** : batterie, basse, instruments et voix, avec activation, volume 0–100 % et Solo par stem sur chaque platine. [Guide](docs/STEMS.md).
+- Accélération NVIDIA CUDA automatique et repli CPU, progression, annulation et cache réutilisable. La préparation se termine avant utilisation.
+- Titre et croix des playlists intégrés au thème, sans barre Windows grise.
+
+## Moteur de stems facultatif
+
+Le composant fonctionne sans Python. Pour les stems, installer Python 3.10–3.12,
+télécharger le [ZIP de l’installateur du moteur](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-stems-engine-0.24.0-alpha.1.zip), le décompresser puis
+lancer `./install-stems.ps1 -DownloadModel` dans PowerShell. Les dépendances et le
+modèle htdemucs sont téléchargés séparément. CUDA est choisi s’il est disponible,
+avec retour au CPU en cas d’échec. `-CPUOnly` installe uniquement le moteur CPU.
+Les utilisateurs du moteur CPU existant doivent relancer l’installateur pour CUDA.
+Le son reste local et les morceaux ne sont pas modifiés. [Installation et limites](docs/STEMS.md).
 
 ## Installation
 
@@ -56,7 +70,7 @@ ont été faits avec foobar2000 2.26.3 preview du 8 novembre 2026. Les autres ve
 Columns UI n’est fournie.
 
 Pour le premier essai, utiliser un profil portable séparé. Installer
-`foo_dj-0.20.0-alpha.1-win-x64.fb2k-component` via
+`foo_dj-0.24.0-alpha.1-win-x64.fb2k-component` via
 **Préférences → Composants → Installer…**, puis redémarrer. Dans l’édition de disposition
 de Default UI, ajouter **DJ Decks** (Utilitaires). Un grand panneau est préférable ;
 commencer vers 900 × 650 px. WebView2, SMP et Smooth Browser ne sont pas nécessaires. Le composant utilise

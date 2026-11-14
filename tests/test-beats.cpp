@@ -28,6 +28,13 @@ int main(){
  auto userA=dj_beats::manual(128,0.073),userB=dj_beats::manual(120,0.211);
  assert(dj_beats::align(userA,userB,18.37,20.12,40,target));assert(circular((target-0.073)/userA.period,(20.12-0.211)/userB.period)<1e-10);
  assert(!dj_beats::Grid{}.valid);
+ for(auto pair:{std::pair<double,double>{86,172},{172,86},{100,180}}){
+   double ownSpeed=1,refSpeed=pair.second==180?1.1:1,factor=1;
+   assert(dj_tempo::match(pair.first,pair.second,refSpeed,ownSpeed,16,&factor)==dj_tempo::Match::ok);
+   auto own=dj_beats::manual(pair.first,.073),reference=dj_beats::manual(pair.second,.211);reference.period/=factor;
+   assert(dj_beats::align(own,reference,18.37,20.12,200,target));
+   for(double elapsed:{0.,1.,7.1,30.})assert(circular((target+ownSpeed*elapsed-own.offset)/own.period,(20.12+refSpeed*elapsed-reference.offset)/reference.period)<1e-9);
+ }
  std::cout<<"Manual grids passed: anchor, millisecond shifts, wrap, invalid values and SYNC\n";
  auto detail=dj_beats::ticks(gb,0.0,4.0,400);assert(detail.stride==1&&detail.pixels.size()==8);
  for(size_t i=1;i<detail.pixels.size();i++)assert(detail.pixels[i]-detail.pixels[i-1]>=49);

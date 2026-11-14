@@ -32,6 +32,8 @@ function Add-Text($zip,[string]$entry,[string]$text) {
 $zip = New-ZipFile $component
 try {
     Add-File $zip $dll 'x64/foo_dj.dll'
+    foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repo 'stems') -File) { Add-File $zip $file.FullName ('stems/'+$file.Name) }
+    Add-File $zip (Join-Path $repo 'docs\STEMS.md') 'stems/README.md'
     foreach ($name in @('LICENSE','THIRD_PARTY_NOTICES.md','README.md','README.fr.md','CHANGELOG.md')) { Add-File $zip (Join-Path $repo $name) $name }
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repo 'licenses') -File) { Add-File $zip $file.FullName ('licenses/'+$file.Name) }
     Add-Text $zip 'SOURCE.txt' "Matching complete source: foo_dj-$version-source.zip. Distribute the matching source archive alongside this binary package. Build instructions and all non-system source/build inputs are included in that archive. This package is an experimental alpha release."
@@ -40,13 +42,21 @@ $zip = New-ZipFile $sourceZip
 try {
     foreach ($file in Get-ChildItem -LiteralPath $repo -File -Recurse -Force | Sort-Object FullName) {
         $relative = $file.FullName.Substring($repo.Length+1).Replace('\','/')
-        if ($relative -match '(^|/)(\.git|\.vs|build|dist|x64|Debug|Release|ARM64|ARM64EC)/') { continue }
+        if ($relative -match '(^|/)(\.git|\.vs|build|dist|x64|Debug|Release|ARM64|ARM64EC|__pycache__)/') { continue }
+        if ($file.Extension -eq '.pyc') { continue }
         if ($file.Extension -match '^\.(obj|pdb|pch|exe|dll|log|user|suo|ilk|idb|exp|tlog|zip|fb2k-component)$') { continue }
         if ($file.Extension -eq '.lib' -and $relative -ne 'sdk/foobar2000/shared/shared-x64.lib') { continue }
         if ($file.Name -in @('foo_dj-session.json','foo_dj-grids.json','test-grid-save.json')) { throw 'Local state unexpectedly present in source tree.' }
         Add-File $zip $file.FullName ('foobar-dj-decks/'+$relative)
     }
 } finally { $zip.Dispose() }
-$lines = foreach ($file in @($component,$sourceZip)) { (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+[IO.Path]::GetFileName($file) }
+$engineZip = Join-Path $dist "foo_dj-stems-engine-$version.zip"
+$zip = New-ZipFile $engineZip
+try {
+    foreach ($name in @('install-stems.ps1','stems_worker.py')) { Add-File $zip (Join-Path $repo ('stems/'+$name)) $name }
+    Add-File $zip (Join-Path $repo 'docs/STEMS.md') 'README.md'
+    foreach ($name in @('LICENSE','THIRD_PARTY_NOTICES.md')) { Add-File $zip (Join-Path $repo $name) $name }
+} finally { $zip.Dispose() }
+$lines = foreach ($file in @($component,$sourceZip,$engineZip)) { (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+[IO.Path]::GetFileName($file) }
 [IO.File]::WriteAllLines((Join-Path $dist 'SHA256SUMS.txt'),$lines,[Text.UTF8Encoding]::new($false))
 Write-Output "Prepared component, matching source and checksums under dist/. No installation or publication performed."

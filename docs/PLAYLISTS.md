@@ -54,4 +54,4 @@ L'enchaînement automatique et l'alternance A/B sont proposés dans le menu AUTO
 de chaque deck. Le déplacement par glisser d'une fenêtre vers l'autre n'est pas
 inclus. Les fenêtres utilisent les contrôles
 Windows redessinés : fond sombre, bord cyan/orange, boutons noirs brillants et
-sélection teintée comme les decks. La barre de titre et le défilement restent Windows.
+sélection teintée comme les decks. Le titre et la croix sont intégrés au bandeau brillant : glisser le bandeau pour déplacer la fenêtre, tirer les bords pour la redimensionner. La croix masque la fenêtre sans vider la liste. Le défilement reste Windows.

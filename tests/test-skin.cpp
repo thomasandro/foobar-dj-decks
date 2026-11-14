@@ -26,6 +26,12 @@ int wmain(int argc,wchar_t** argv) {
             assert(L.analyse[0].bottom<L.queue[0].top);
             assert(L.release.right<L.automation.left);
             assert(L.automation.right<=L.deck.right);
+            assert(L.queue[1].bottom<L.stemPrepare.top);
+            assert(L.stemPrepare.right<L.stem[0].left);
+            assert(L.stem[3].right<=L.deck.right);
+            assert(L.stem[3].bottom<L.wave.top);
+            for(int n=1;n<4;++n)assert(L.stem[n-1].right<L.stem[n].left);
+            for(int n=0;n<4;++n){assert(L.stem[n].bottom<L.stemSolo[n].top);assert(L.stemSolo[n].right<L.stemVolume[n].left);assert(L.stemVolume[n].Width()>=20);assert(L.stemVolume[n].bottom<L.wave.top);}
             for(auto r : {L.btn[0],L.btn[1],L.matchKey,L.pitch[1],L.range,L.key,L.beat,L.sync,L.analyse[0]}) {
                 assert(r.Width()>0 && r.Height()>0);
                 assert(r.left>=L.deck.left && r.right<=L.deck.right);
@@ -54,6 +60,33 @@ int wmain(int argc,wchar_t** argv) {
     dj_skin::surface(dc,stateRect,RGB(0,194,211),false,true,true);GdiFlush();
     std::vector<unsigned char> pressed((unsigned char*)pixels,(unsigned char*)pixels+1100*44*4);
     assert(normal!=hover && hover!=pressed && normal!=pressed);
+    for(int n=0;n<8;++n){dj_skin::colorIndex[0]=n;dj_skin::colorIndex[1]=7-n;assert(dj_skin::accent(0)==dj_skin::palette[n]&&dj_skin::accent(1)==dj_skin::palette[7-n]);}
+    dj_skin::colorIndex[0]=0;dj_skin::colorIndex[1]=1;dj_skin::flat=true;
+    dj_skin::surface(dc,stateRect,RGB(0,194,211));GdiFlush();auto flatPixel=GetPixel(dc,30,15);
+    assert(flatPixel==RGB(30,36,45));
+    dj_skin::surface(dc,stateRect,RGB(0,194,211),false,true);GdiFlush();auto flatHover=GetPixel(dc,30,15);assert(flatHover!=flatPixel);
+    dj_skin::surface(dc,stateRect,RGB(0,194,211),false,true,true);GdiFlush();assert(GetPixel(dc,30,15)!=flatHover);
+    dj_skin::surface(dc,stateRect,RGB(0,194,211),true);GdiFlush();assert(GetPixel(dc,30,15)==RGB(22,27,34));
+    for(int height:{15,22,30}){
+        HFONT font=CreateFontW(-height,0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,0,0,L"Segoe UI");auto oldFont=SelectObject(dc,font);
+        for(auto dims:{SIZE{784,614},SIZE{900,650},SIZE{1920,1080}})for(int deck=0;deck<2;++deck)for(auto text:{L"LECTURE",L"PLAYING",L"READY",L"FREE",L"LIBRE",L"PRÊT"}){
+            auto L=MakeLayout(deck,CRect(0,0,dims.cx,dims.cy));SIZE size;GetTextExtentPoint32W(dc,text,(int)wcslen(text),&size);
+            auto r=HeaderStatusRect(L,size.cx);assert(r.Width()>=size.cx&&r.right<=L.deck.right-20&&r.left>L.title.left+50);
+        }SelectObject(dc,oldFont);DeleteObject(font);
+    }
+    dj_skin::flat=false;
+    // Analysis (magnifier) and matching (=), BPM and key must stay distinguishable
+    // in the actual small/large buttons and both themes, without any screen capture.
+    for(bool flat:{false,true})for(int size:{28,36}){
+        dj_skin::flat=flat;std::vector<std::vector<unsigned char>> glyphs;
+        for(auto kind:{dj_skin::Icon::pulse,dj_skin::Icon::keySearch,dj_skin::Icon::bpm,dj_skin::Icon::keyMatch}){
+            RECT r={0,0,size,size};HBRUSH black=CreateSolidBrush(RGB(0,0,0));FillRect(dc,&r,black);DeleteObject(black);
+            dj_skin::icon(dc,r,kind);GdiFlush();std::vector<unsigned char> glyph;
+            for(int y=0;y<size;++y)glyph.insert(glyph.end(),(unsigned char*)pixels+y*1100*4,(unsigned char*)pixels+y*1100*4+size*4);
+            assert(std::count_if(glyph.begin(),glyph.end(),[](unsigned char c){return c>100;})>30);
+            for(auto& prior:glyphs)assert(prior!=glyph);glyphs.push_back(glyph);
+        }
+    }dj_skin::flat=false;
     for(int deck=0;deck<2;++deck) {
         auto L=MakeLayout(deck,client);auto accent=deck?RGB(245,143,27):RGB(0,194,211);
         dj_skin::surface(dc,L.deck,accent,true);

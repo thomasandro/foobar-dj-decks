@@ -1,30 +1,39 @@
-# DJ Decks 0.20.0-alpha.1 — experimental prerelease
+# DJ Decks 0.24.0-alpha.1 — stems, GPU acceleration and appearance settings
 
-New since 0.18.0-alpha.1:
+New since **0.20.0-alpha.1**:
 
-- **Saved playlists on each deck:** two-line Current/Next previews and independent floating windows. Drop multiple tracks/albums in order, reorder/remove selections and double-click to load. Removing entries never deletes music files or interrupts the loaded track.
-- **Matching playlist appearance:** dark alternating rows, cyan/orange selection accents and glossy black buttons with hover/press feedback.
-- **AUTO playback:** independent auto-next on each deck, or alternating A1 → B1 → A2 → B2, preparing the silent deck's next track. If one list ends, the other finishes its remaining entries.
-- **Configurable A/B crossfade:** 0, 1, 2, 3, 5, 8, 10, 15, 20 or 30 seconds; equal-power or linear curve. Fade time follows output audio frames and suspends during pause/output stalls. End triggering accounts for deck speed.
+- **Local stems:** drums, bass, instruments and vocals; mute, volume and Solo for each part on both decks. Preparation has progress/cancellation and a reusable cache.
+- **NVIDIA GPU acceleration:** automatic CUDA selection with CPU fallback if unavailable or if GPU processing fails. Same htdemucs model and float32 settings.
+- **Half/double BPM matching:** exact, half and double BPM candidates, selecting the nearest speed inside the chosen range; beat SYNC follows the matching grid.
+- **Appearance:** Glossy or subdued Flat theme, eight independent deck colors and a gear Settings menu. Clearer BPM/key icons and corrected header text clipping.
+- **Floating playlists:** integrated themed title and close button, with dragging/resizing and saved lists retained.
 
-Thanks to **[StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621)**, who suggested:
-> A small (pop-up) playlist of some kind would be nice.
+Thanks, **[StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090691.html#msg1090691)** — my first, best and so far only tester! Of course your requests get special attention. :)
+The Flat theme, header fixes and clearer musical symbols follow your suggestions.
 
-The playlist work follows that suggestion and the earlier UI/file-release feedback.
+![Stems, customized deck colors and floating playlist — user-supplied screenshot](https://raw.githubusercontent.com/thomasandro/foobar-dj-decks/v0.24.0-alpha.1/docs/images/dj-decks-stems-0.24.png)
 
-![Themed floating playlists — user-supplied screenshot](https://raw.githubusercontent.com/thomasandro/foobar-dj-decks/v0.20.0-alpha.1/docs/images/dj-decks-playlists-0.20.png)
+## Downloads and setup
 
-*User-supplied playlist screenshot, reused unchanged; the AUTO menu is not shown.*
+- [Installable component — Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-0.24.0-alpha.1-win-x64.fb2k-component): Preferences → Components → Install, then restart.
+- [Optional stems engine installer](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-stems-engine-0.24.0-alpha.1.zip): Python 3.10–3.12 required. Extract and run `./install-stems.ps1 -DownloadModel` in PowerShell. Downloads pinned dependencies and the model; CPU fallback included. Use `-CPUOnly` for the smaller CPU installation. Existing CPU engines need this installer rerun to enable CUDA.
+- Complete matching source ZIP and SHA-256 checksums are attached. Python packages and model weights are downloaded separately, not bundled.
 
-Install the **win-x64.fb2k-component** asset via Preferences → Components → Install.
-Matching complete sources/dependencies: **source.zip**. SHA-256: **SHA256SUMS.txt**.
+[Detailed changelog, including unpublished 0.20.1–0.24.0 milestones](https://github.com/thomasandro/foobar-dj-decks/blob/v0.24.0-alpha.1/CHANGELOG.md) · [Stems setup and limits](https://github.com/thomasandro/foobar-dj-decks/blob/v0.24.0-alpha.1/docs/STEMS.md) · [Appearance](https://github.com/thomasandro/foobar-dj-decks/blob/v0.24.0-alpha.1/docs/APPEARANCE.md)
 
-[Detailed changelog, including unpublished milestones](https://github.com/thomasandro/foobar-dj-decks/blob/v0.20.0-alpha.1/CHANGELOG.md) · [Playlist guide](https://github.com/thomasandro/foobar-dj-decks/blob/v0.20.0-alpha.1/docs/PLAYLISTS.md) · [AUTO guide](https://github.com/thomasandro/foobar-dj-decks/blob/v0.20.0-alpha.1/docs/AUTOMATIC_PLAYBACK.md)
+## Performance and validation
 
-**Experimental, unsigned; Windows x64 / foobar2000 2.x / Default UI.**
-Build and native tests passed: actual automatic controller, fade clocks/curves,
-playlist persistence/reordering, themed windows/layout and 30 synthetic audio cases.
-Same-deck auto-next is not gapless. Live transition quality, clean-profile installation,
-long runtime and shutdown/unload checks remain pending. No limiter/headphone cue;
-beat SYNC remains experimental. Slow shutdown remains under investigation.
-This publication did not open, install into, monitor or capture foobar.
+GTX 1070 Ti, same synthetic 30-second excerpt, htdemucs/float32, three runs per mode:
+median preparation **53.04 s CPU (two threads) → 3.01 s CUDA**, about **17.6×** faster.
+First result including process initialization: **73.98 s → 13.92 s**. These are offline
+predecoded-WAV measurements, not a real-time streaming guarantee or a music-quality test.
+
+Release x64 build/native tests passed, including 60 actual audio-processing cases,
+stem mute/solo combinations, real CUDA preparation, cache/cancellation and real CPU
+separation after an injected CUDA error. The supplied screenshot is from the development
+interface. This publication did not launch, install into, monitor or capture foobar.
+
+**Experimental, unsigned; foobar2000 2.x x64 / Default UI.** Stems are approximate,
+fully prepared before use, limited to 30 minutes/1 GiB decoded input and stored in a
+cache without automatic eviction (~85 MB/minute). No limiter/headphone cue; SYNC is
+experimental. Clean-profile and extended runtime/shutdown validation remain incomplete.

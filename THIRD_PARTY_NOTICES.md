@@ -36,3 +36,5 @@ Upstream: [foobar2000 SDK](https://www.foobar2000.org/SDK),
 [SoundTouch](https://soundtouch.surina.net/),
 [picojson](https://github.com/kazuho/picojson/tree/v1.3.0),
 [WTL](https://sourceforge.net/projects/wtl/).
+
+Optional stems engine (0.21.0-dev): Demucs 4.0.1 / htdemucs and PyTorch/torchaudio, NumPy and soundfile are installed separately by the optional installer. Their libraries and weights are not bundled in the component/source archives. Demucs code is MIT-licensed; retain each external package's installed upstream notices. The worker adapter is original component code. Upstream: https://github.com/facebookresearch/demucs/tree/v4.0.1 .

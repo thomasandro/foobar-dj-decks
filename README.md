@@ -3,22 +3,22 @@
 [Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
-**0.20.0-alpha.1 is an experimental alpha release.**
+**0.24.0-alpha.1 is an experimental alpha release.**
 
 ## ⬇ Download the component
 
-**[Download DJ Decks 0.20.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.20.0-alpha.1/foo_dj-0.20.0-alpha.1-win-x64.fb2k-component)**
+**[Download DJ Decks 0.24.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-0.24.0-alpha.1-win-x64.fb2k-component)**
 
 Installable `.fb2k-component` package for foobar2000 2.x x64.
 In foobar2000: **Preferences → Components → Install…**, then restart.
 
-[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.20.0-alpha.1)
+[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.24.0-alpha.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
 
-![DJ Decks glossy cyan/orange interface](docs/images/dj-decks-playlists-0.20.png)
+![DJ Decks with stems, customized deck colors and floating playlist](docs/images/dj-decks-stems-0.24.png)
 
-*User-supplied screenshot of the themed floating playlists; the AUTO menu is not shown.*
+*User-supplied screenshot of the 0.24 development interface: stems, per-deck colors and integrated playlist header.*
 
 Thanks to [StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621)
 for suggesting playlist popups and for the UI/file-release feedback.
@@ -30,11 +30,11 @@ for suggesting playlist popups and for the UI/file-release feedback.
 - Waveforms with zoom, elapsed/remaining-region shading and clickable seek.
 - Front covers, artist/title on separate scrolling lines, French/English interface.
 - Tagged BPM display; selectable ±8%, ±16% or ±50% speed range, vinyl or SoundTouch key-lock mode.
-- One-click tagged-BPM matching and experimental beat-phase SYNC within the selected range.
+- One-click BPM matching and experimental beat SYNC: exact, half or double BPM, choosing the closest in-range speed. [Details](docs/TEMPO_MATCHING.md).
 - Independent pitch transposition from −12 to +12 semitones, without changing tempo.
 - One-click harmonic key matching: same key or relative major/minor, nearest transposition.
-- Glossy cyan/orange casings, black icon buttons with hover/pressed feedback and bilingual tooltips.
-- Compact lower strip with common transport, crossfader and FR/EN menu.
+- Glossy or subdued Flat theme, eight independent deck colors, black icon buttons and bilingual tooltips. [Appearance](docs/APPEARANCE.md).
+- Compact lower strip with common transport, crossfader and gear Settings menu (language, theme and deck colors).
 - Explicit Stop/Release file button on each deck; Play reopens at the retained position.
 - Camelot + standard musical key labels, e.g. 8A (Am), and colored compatibility badges.
 - Per-deck BPM/key analysis through optional foo_bpm / foo_musical_key components;
@@ -47,6 +47,20 @@ for suggesting playlist popups and for the UI/file-release feedback.
 - AUTO: independent auto-next or alternating A/B with 0–30 second fades, equal-power/linear curve. [Automatic playback](docs/AUTOMATIC_PLAYBACK.md).
 - Native foobar/Explorer drag-and-drop; optional compatible Smooth Playlist/Browser text payloads.
 
+- Optional local **four-stem separation**: drums, bass, instruments and vocals, with mute, 0–100% volume and Solo per stem on each deck. [Stems guide](docs/STEMS.md).
+- Automatic NVIDIA CUDA acceleration with CPU fallback; preparation progress, cancellation and reusable cache. Separation completes before use.
+- Floating playlist title and close button integrated into the selected theme.
+
+## Optional stems engine
+
+The component works without Python. For stems, install Python 3.10–3.12, download
+the [optional engine installer ZIP](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-stems-engine-0.24.0-alpha.1.zip), extract it and run
+`./install-stems.ps1 -DownloadModel` in PowerShell. It downloads the dependencies
+and htdemucs model separately. NVIDIA CUDA is selected when available; otherwise CPU.
+Use `-CPUOnly` for a CPU-only installation. Existing CPU users must rerun the
+installer to obtain CUDA support. Audio stays local; source tracks are untouched.
+See [setup, cache size and limits](docs/STEMS.md).
+
 ## Requirements and installation
 
 Windows x64 and foobar2000 2.x x64, Default User Interface. Development use was on
@@ -54,7 +68,7 @@ foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions ha
 not been validated. There is no x86, ARM64, macOS or native Columns UI build.
 
 Prefer an isolated portable profile for the first test. Install
-`foo_dj-0.20.0-alpha.1-win-x64.fb2k-component` with
+`foo_dj-0.24.0-alpha.1-win-x64.fb2k-component` with
 **Preferences → Components → Install…**, then restart. In Default UI layout editing
 mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
 This component does not require WebView2, Spider Monkey Panel or Smooth Browser.
@@ -81,8 +95,8 @@ before listening to both together; there is no output limiter.
 Speed wheel: 0.1% steps; Shift+wheel: 0.01%; right-click: neutral. **Key lock: ON**
 changes tempo while preserving pitch; OFF is vinyl-style rate change.
 
-**BPM = A/B** matches the effective tagged BPM of the other deck. Both tags must
-be valid and the required speed must fit the destination deck's selected range. **SYNC = A/B** also seeks the selected
+**BPM = A/B** matches the effective tagged BPM of the other deck. Both tags must be valid. Exact, half and double equivalents are compared; the closest
+in-range speed is chosen, with exact matching winning ties. **SYNC = A/B** also seeks the selected
 deck slightly to match estimated beat phase; it keeps play/pause states. It is
 one-shot, not continuous tracking or downbeat/bar detection. Dotted grids are
 indicative only and do not satisfy SYNC's automatic confidence requirement.

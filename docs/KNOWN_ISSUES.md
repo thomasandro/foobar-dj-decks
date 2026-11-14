@@ -25,7 +25,7 @@
   rubato, syncopation, tempo drift and incorrect/half/double BPM tags are problematic.
 - Dotted grids show indicative tagged spacing; their phase is uncertain. Manual
   grids are user anchors, not proof of correct tempo or meter. SYNC is one-shot.
-- No automatic half/double-BPM correction or multi-anchor tempo map.
+- Auto BPM/SYNC considers half/double equivalents; no multi-anchor tempo map or automatic BPM-tag rewriting.
 - Loading/seek operations and worker joins still have synchronous paths; slow
   storage, artwork providers or decoder calls can delay the UI and shutdown.
 - Waveforms are rebuilt for each load and held in memory; very long files are costly.
@@ -54,6 +54,7 @@
 
 ## Files and reporting
 
-No user sessions, music, personal paths, screenshots, debug dumps or development logs
+No user sessions, music, personal paths, private screenshots, debug dumps or development logs
 belong in a source release. Redact those from issue reports. Retained profile JSON
 is not automatically removed on component uninstall.
+Screenshots explicitly supplied for publication are included under docs/images.

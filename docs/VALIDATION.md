@@ -62,3 +62,11 @@ still require host validation.
 Earlier development screenshots showed key tags and a low-contrast badge; this was
 corrected in 0.14.1-dev. No automated live-host result is inferred from those screenshots.
 No guarantee of live-DJ stability or compatibility with all foobar 2.x versions is made.
+
+## 0.24 public preparation
+
+Same native suite as 0.24.0-dev, plus five isolated backend tests (CPU unavailable GPU,
+CUDA success, GPU failure/retry, CPU error, both errors). Real installed CUDA processing
+and a simulated CUDA error followed by real CPU inference produced four valid stems
+whose sum reconstructed synthetic input within 1.5e-8. These checks never launch foobar.
+The supplied screenshot illustrates the development build, not an automated host test.

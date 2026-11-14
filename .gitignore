@@ -1,4 +1,6 @@
 # Build products and local tools
+__pycache__/
+*.pyc
 /build/
 /dist/
 **/.vs/

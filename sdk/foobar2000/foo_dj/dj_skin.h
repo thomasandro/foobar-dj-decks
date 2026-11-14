@@ -2,8 +2,14 @@
 #include <windows.h>
 #include <gdiplus.h>
 #include <algorithm>
+#include <atomic>
+#include <cmath>
 #pragma comment(lib,"gdiplus.lib")
 namespace dj_skin {
+inline std::atomic<bool> flat{false};
+inline constexpr COLORREF palette[]={RGB(0,194,211),RGB(245,143,27),RGB(90,165,255),RGB(190,140,255),RGB(90,210,150),RGB(245,99,115),RGB(232,204,94),RGB(185,195,210)};
+inline std::atomic<int> colorIndex[2]={{0},{1}};
+inline COLORREF accent(int deck){int n=colorIndex[deck].load();return palette[n>=0&&n<8?n:deck];}
 struct Runtime {
     ULONG_PTR token=0;
     Runtime() { Gdiplus::GdiplusStartupInput input; Gdiplus::GdiplusStartup(&token,&input,nullptr); }
@@ -18,6 +24,12 @@ inline void rounded(Gdiplus::GraphicsPath& p,Gdiplus::RectF r,float radius) {
 }
 inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bool active=false,bool pressed=false) {
     if(rect.right-rect.left<2 || rect.bottom-rect.top<2) return;
+    if(flat.load()){
+        COLORREF fill=casing?RGB(22,27,34):pressed?RGB(12,16,22):active?RGB(49,57,68):RGB(30,36,45);
+        HBRUSH brush=CreateSolidBrush(fill);FillRect(dc,&rect,brush);DeleteObject(brush);
+        brush=CreateSolidBrush(casing||active?accent:RGB(65,75,88));FrameRect(dc,&rect,brush);
+        if(casing){RECT top=rect;top.bottom=top.top+3;FillRect(dc,&top,brush);}DeleteObject(brush);return;
+    }
     ready(); Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     Gdiplus::RectF r((float)rect.left+2,(float)rect.top+1,(float)(rect.right-rect.left)-5,(float)(rect.bottom-rect.top)-5);
     Gdiplus::GraphicsPath shadow;auto sr=r;sr.Y+=3;rounded(shadow,sr,casing?19.f:9.f);
@@ -43,7 +55,7 @@ inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bo
     Gdiplus::Pen highlight(Gdiplus::Color(casing?180:105,255,255,255),1.f);
     g.DrawLine(&highlight,r.X+8,r.Y+3,r.GetRight()-8,r.Y+3);
 }
-enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release };
+enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release,settings };
 inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)) {
     const int width=rect.right-rect.left,height=rect.bottom-rect.top;
     if(width<8 || height<8) return;
@@ -55,7 +67,32 @@ inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)
     auto line=[&](float a,float b,float c,float d){g.DrawLine(&pen,a,b,c,d);};
     auto triangle=[&](float x,float y,float w,float h){Gdiplus::PointF pts[]={{x,y},{x+w,y+h/2},{x,y+h}};g.FillPolygon(&brush,pts,3);};
     auto note=[&](){line(10,5,10,16);line(10,5,17,3);line(17,3,17,14);g.FillEllipse(&brush,5.f,14.f,5.f,4.f);g.FillEllipse(&brush,12.f,12.f,5.f,4.f);};
+    // Musical marks are vector paths, avoiding missing-glyph/font dependencies.
+    // Short labels distinguish analysis (magnifier) from matching (=).
+    if(kind==Icon::pulse||kind==Icon::keySearch||kind==Icon::bpm||kind==Icon::keyMatch){
+        bool tempo=kind==Icon::pulse||kind==Icon::bpm;
+        bool analyse=kind==Icon::pulse||kind==Icon::keySearch;
+        if(tempo){line(8,2,8,12);line(8,2,13,4);g.FillEllipse(&brush,3.f,10.f,5.f,4.f);}
+        else if(analyse){ // flat: initial/source key
+            line(6,1,6,14);Gdiplus::GraphicsPath flatMark;
+            flatMark.AddBezier(6.f,8.f,14.f,3.f,15.f,10.f,6.f,14.f);g.DrawPath(&pen,&flatMark);
+        }else{ // sharp: harmonic key matching, not a literal transpose-up command
+            line(5,2,4,14);line(10,1,9,13);line(2,6,13,4);line(2,11,13,9);
+        }
+        if(analyse){g.DrawEllipse(&pen,15.f,3.f,6.f,6.f);line(20,9,23,12);}
+        else {line(16,6,23,6);line(16,10,23,10);}
+        Gdiplus::FontFamily family(L"Segoe UI");Gdiplus::Font font(&family,7.5f,Gdiplus::FontStyleBold,Gdiplus::UnitPixel);
+        Gdiplus::StringFormat format;format.SetAlignment(Gdiplus::StringAlignmentCenter);format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        Gdiplus::RectF caption(0,15,24,9);g.DrawString(tempo?L"BPM":L"KEY",3,&font,caption,&format,&brush);return;
+    }
     switch(kind) {
+    case Icon::settings:{
+        Gdiplus::GraphicsPath gear;
+        for(int n=0;n<64;++n){float angle=(float)(n*6.283185307179586/64),radius=(n%8<4)?10.f:8.f;
+            float x=12+radius*std::cos(angle),y=12+radius*std::sin(angle);
+            if(n==0)gear.StartFigure();else{float priorAngle=(float)((n-1)*6.283185307179586/64),priorRadius=((n-1)%8<4)?10.f:8.f;gear.AddLine(12+priorRadius*std::cos(priorAngle),12+priorRadius*std::sin(priorAngle),x,y);}}
+        gear.CloseFigure();g.DrawPath(&pen,&gear);g.DrawEllipse(&pen,8.f,8.f,8.f,8.f);break;
+    }
     case Icon::release:g.FillRectangle(&brush,3.f,5.f,10.f,14.f);line(15,12,23,12);line(20,8,23,12);line(20,16,23,12);break;
     case Icon::play: triangle(6,4,13,16);break;
     case Icon::pause:g.FillRectangle(&brush,6.f,4.f,4.f,16.f);g.FillRectangle(&brush,14.f,4.f,4.f,16.f);break;

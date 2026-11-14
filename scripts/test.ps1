@@ -33,3 +33,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Native tests failed.' }
 } finally { $env:DJ_DECKS_VCVARS = $prior }
 Write-Output 'All native tests passed. No foobar host was launched.'
+if ($env:DJ_STEM_ENGINE) {
+    & (Join-Path $env:DJ_STEM_ENGINE 'venv/Scripts/python.exe') (Join-Path $repo 'tests/test-stem-backend.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Stem backend tests failed.' }
+}

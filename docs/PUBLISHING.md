@@ -16,3 +16,5 @@ Third alpha: v0.17.1-alpha.1, authorized on 2026-11-14, with user-supplied scree
 
 Fourth alpha: v0.18.0-alpha.1, authorized on 2026-11-14.
 Fifth alpha: v0.20.0-alpha.1, authorized on 2026-11-14 with the new user-supplied playlist screenshot and credit to StyxCrosser.
+
+Sixth alpha: v0.24.0-alpha.1, authorized on 2026-11-14, with user-supplied stems screenshot and StyxCrosser credit.
