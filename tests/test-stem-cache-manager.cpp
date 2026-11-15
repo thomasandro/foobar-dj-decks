@@ -8,7 +8,7 @@ namespace fs=std::filesystem;
 void write(const fs::path& p){std::ofstream f(p,std::ios::binary);f<<"1234";}
 int wmain(int argc,wchar_t** argv){
     if(argc==2){SetEnvironmentVariableW(L"LOCALAPPDATA",argv[1]);assert(dj_stems::inspectCache(true).errors==1);std::cout<<"Junction cache root/parent refused\n";return 0;}
-    auto base=fs::absolute(fs::path("build/tests")/(L"cache-manager-"+std::to_wstring(GetTickCount64())));
+    auto base=fs::temp_directory_path()/(L"dj-cache-test-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64()));
     fs::create_directories(base);SetEnvironmentVariableW(L"LOCALAPPDATA",base.c_str());
     using namespace dj_stems;fs::create_directories(cacheRoot());
     auto add=[](wchar_t c){std::wstring key(64,c);auto p=fs::path(cacheRoot())/key;fs::create_directory(p);for(auto n:names)write(p/n);write(p/L"manifest.json");return key;};

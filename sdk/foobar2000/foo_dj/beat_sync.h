@@ -53,6 +53,12 @@ inline bool align(const Grid & own, const Grid & reference, double ownPosition, 
     if (target > length-0.1) target -= own.period;
     return std::isfinite(target) && target >= 0 && target <= length-0.1 && std::abs(target-ownPosition) <= own.period + 0.01;
 }
+// Shared by rendering and loop quantization: never use a different phase for Q.
+inline Grid displayed(Grid estimated,double bpm,bool isManual,double anchor,bool& indicative){
+    Grid grid=isManual?manual(bpm,anchor):estimated;indicative=!grid.valid;
+    if(!grid.valid&&std::isfinite(bpm)&&bpm>=40&&bpm<=250){grid.period=60./bpm;grid.valid=true;}
+    return grid;
+}
 struct Ticks { std::vector<int> pixels; unsigned stride = 1; };
 inline Ticks ticks(const Grid & grid, double start, double span, int width) {
     Ticks out;

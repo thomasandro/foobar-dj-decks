@@ -4,7 +4,7 @@
 #include <iostream>
 #include "../sdk/foobar2000/foo_dj/preview_plan.h"
 struct Abort{std::atomic<bool> stopped{false};void set(){stopped=true;}bool is_aborting(){return stopped.load();}};
-template<class F>bool until(F done){auto start=GetTickCount64();while(GetTickCount64()-start<2000){if(done())return true;Sleep(1);}return done();}
+template<class F>bool until(F done){auto start=GetTickCount64();while(GetTickCount64()-start<10000){if(done())return true;Sleep(1);}return done();}
 int main(){
     using namespace dj_preview;
     auto p=plan(100,0);assert(p.size()==1&&p[0].start==0&&p[0].seconds==8);

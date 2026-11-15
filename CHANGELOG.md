@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.37.0-beta.1 — 2026-11-15 (x64 / x86)
+
+Public beta with both architectures, installable packages, matching complete sources and SHA-256 checksums. Includes every previously unpublished milestone from 0.35.0 through 0.37.0, detailed below: independent/persistent A/B loops, Q alignment of existing points, six-tab settings, tooltip/contrast corrections and session-file save/load/recovery.
+
+The user confirmed the x64 build and session-file workflow working. Both architectures compile and pass native release regression suites; x86 real-host testing remains requested. Stems remain experimental. Historical notes about x86 deferral below describe the local development stage; this release now includes x86.
+
+- Settings → Playlists: export both playlists or a full deck session to versioned UTF-8 JSON; import with an explicit lists-only/full choice, plus one-level recovery of the state before import. No audio files are copied.
+- Preserve queue order, duplicates/subsongs, loaded paths/positions, per-deck loop points/manual grids, speed/range, pitch/key lock, Q, volume and crossfader/fade settings. Include saved markers for referenced playlist tracks. Full imports restore paused with loops/AUTO/Cue off; stems/profile output settings are not restored.
+- Validate complete documents and merged marker-library capacity before applying. Atomic same-folder file replacement preserves an existing file on failure. Save a recovery snapshot before applying; abort if that save fails. Reject unsupported schemas, malformed data and limits without changing live lists/decks.
+- Lists-only imports keep loaded deck playback and reconcile queue current pointers. Full imports close the previous readers safely, retain unavailable references and hand restored positions/per-deck point overrides through asynchronous silence preparation.
+- Targeted x64 tests cover actual capture/apply with mock readers, generated Unicode file IO, failed replacement/temporary cleanup, metadata/order/subsong retention, missing/empty/pending decks, validated mutation boundaries and actual existing preparation/loop/settings paths. x86 was deferred during this local development stage; see release validation above.
+
+
+## 0.36.2-beta.1 — previously unpublished development milestone
+
+- Fix blank/invisible settings toggles and action buttons: their content host now forwards WM_DRAWITEM/WM_MEASUREITEM to the owner-draw handler. The previous contrast test bypassed that parent route; the regression now sends drawing through the real control parent.
+- Enabling Q from the deck or Playback tab now quantizes existing A/B points (or A alone) to the displayed beat grid and immediately persists them. Disabling preserves positions. Missing/invalid grids or an impossible pair leave points/Q unchanged with a non-fatal notice.
+- Preserve playback/pause and active-loop state. If an active loop’s new bounds exclude the current position, seek its original/stem reader to the new A and clear lookahead. Keep a valid distinct pair near track end when an earlier A grid line is needed.
+- Targeted x64 tests cover parent-routed drawing pixels, bound toggle clicks, snapped point persistence, paused/active loops, invalid grids, A-only points, near-end bounds and the existing loop/storage regressions. x86 compilation explicitly deferred at user request.
+
+
+## 0.36.1-beta.1 — previously unpublished development milestone
+
+- Tooltip responsiveness: invalidate only old/new button feedback rectangles for hover/press/leave; reuse the panel paint bitmap until resize. Skip GDI+ skin/icon work outside the dirty clip. Preserve existing visible rendering.
+- Disable tooltip animation/fade locally, set initial delay to 300 ms and button-to-button reshow delay to 75 ms, and retain cached tool registration until layout/language changes. No global Windows settings or monitoring added.
+- Fix unreadable dark settings toggles/buttons with explicitly drawn light labels, check marks and keyboard focus. Checkbox click state is driven by the existing bound setting rather than native owner-draw check state. Applies to all tabs, including Playback.
+- Regressions exercise actual tooltip setup, stable registration, delays, cached bitmap reuse/resize, owner-drawn text pixels, toggle clicks and existing settings bindings. A separate offscreen benchmark compares the old/new clipped renderer and checks identical visible pixels; it is not a live-host latency test.
+
+
+## 0.36.0-beta.1 — previously unpublished development milestone
+
+- Replace the lower gear popup with one owned, modeless, dark settings window: Appearance, Audio, Headphones, Playlists, Playback and Stems tabs; immediate changes and preserved existing settings.
+- Expose the existing controls directly, including safe headphone endpoint selection/refresh, continuous 0–100% cue volume, preview modes, format presets/custom editor, ReplayGain/scrobble, silence trim and protected stem-cache manager. Add shared fade controls and per-deck Q alongside local shortcuts.
+- Reuse the floating window, remember the current tab during the session, support resize/scroll and keyboard navigation, and destroy it with the owning panel. Refresh is event-driven; no new polling timer, host capture or audio-device test is introduced.
+- Preserve unknown/custom stored fade, threshold, format and unavailable output choices without resetting them on display. Exclude/recheck the master cue endpoint and reuse the existing trim-preparation cancellation/adoption path.
+- Hidden-window regressions exercise all categories in both languages, actual settings row/binding methods with mock services, keyboard/focus layout, reuse, close/reopen, owned teardown and current-value retention.
+
+
+## 0.35.2-beta.1 — previously unpublished development milestone
+
+- Per-deck Q option beside A/B controls: snap newly set A/B points to the nearest displayed beat-grid line, using the current zoom stride. Off by default, persisted independently in foobar configuration. Existing saved points are not moved.
+- Share grid selection/phase between rendering and quantization: manual, accepted estimated or dotted indicative BPM fallback. Respect track/trim bounds and minimum A/B interval without moving a point off-grid. Refuse missing/unusable grids with a non-fatal notice.
+- Keep snapped positions in source seconds and persist them through the existing point library. Later tempo/grid/zoom changes do not silently move saved points.
+- Native tests cover snapped UI point saves, invalid-grid preservation, nonzero grid phases, coarse visible strides, constrained B placement, missing/invalid grids, rendering geometry and existing loop/persistence behavior.
+
+
+## 0.35.1-beta.1 — previously unpublished development milestone
+
+- Persist A/B points per canonical file path and subsong in profile `foo_dj-loops.json`, including partial A-only points. Restore on loading on either deck, after normal close/restart, always with looping disabled. Last edit wins for a shared track.
+- Save immediately after A/B edits and clear, outside the audio mutex; clear removes the stored record. Reuse atomic temporary-file replacement and retry on normal session save. Report write failures without cancelling playback/AUTO.
+- Validate stored types, finite positions, minimum interval and current duration/trim bounds; ignore malformed/missing records safely. No audio/tag modifications.
+- Targeted native regressions exercise the actual file reader/writer, failed replacement preserving the previous file, JSON round trips, Unicode/subsongs, partial points, overwrite/clear, invalid bounds and actual UI save calls outside the audio mutex.
+
+
+## 0.35.0-beta.1 — previously unpublished development milestone
+
+- Independent manual A/B loops on both decks: set A/B, enable/disable, clear; minimum 100 ms. Preserve play/pause when enabling; seek to A. Show source times, waveform markers and bilingual tooltips in the selected theme.
+- Split shared audio output blocks at loop boundaries, seek the original or stem reader to A and clear processing/lookahead buffers. Preserve the other deck clock, tempo/key/volume/cue behavior; no UI timer controls loop timing.
+- Preserve AUTO mode while a loop holds progression; alternating mode waits for both loops to be disabled. Refuse enabling during an in-progress automatic fade. Seeks outside disable the loop, inside retain it; loading resets points. Session-only points, no beat quantization or seamless-click guarantee.
+- Keep invalid loop-point notices separate from playback errors, so a point-setting mistake does not cancel AUTO. Also guard the completed-but-not-yet-adopted fade state.
+- Harden native test failure detection for negative process exits; allow asynchronous preview completion a generous test-only timeout and use a short unique temporary cache fixture path.
+- Regression tests cover actual loop commands, AUTO waiting/resumption, seek behavior, source/stem buffer resets and independent boundaries across three output rates and three speeds, plus hidden layout checks. No foobar access, capture or monitoring.
+
+
 ## 0.34.1-beta.1 — 2026-11-15
 
 Public beta for x64 and x86, with installable packages and a common complete source archive.

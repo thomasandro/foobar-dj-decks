@@ -23,7 +23,7 @@ inline void rounded(Gdiplus::GraphicsPath& p,Gdiplus::RectF r,float radius) {
     p.AddArc(r.GetRight()-d,r.GetBottom()-d,d,d,0,90);p.AddArc(r.X,r.GetBottom()-d,d,d,90,90);p.CloseFigure();
 }
 inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bool active=false,bool pressed=false) {
-    if(rect.right-rect.left<2 || rect.bottom-rect.top<2) return;
+    if(rect.right-rect.left<2 || rect.bottom-rect.top<2 || !::RectVisible(dc,&rect)) return;
     if(flat.load()){
         COLORREF fill=casing?RGB(22,27,34):pressed?RGB(12,16,22):active?RGB(49,57,68):RGB(30,36,45);
         HBRUSH brush=CreateSolidBrush(fill);FillRect(dc,&rect,brush);DeleteObject(brush);
@@ -58,7 +58,7 @@ inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bo
 enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release,settings,headphones,stop };
 inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)) {
     const int width=rect.right-rect.left,height=rect.bottom-rect.top;
-    if(width<8 || height<8) return;
+    if(width<8 || height<8 || !::RectVisible(dc,&rect)) return;
     ready(); Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     const float size=(float)(std::min)(36,(std::min)(width-8,height-8));
     g.TranslateTransform(rect.left+(width-size)/2,rect.top+(height-size)/2);g.ScaleTransform(size/24,size/24);

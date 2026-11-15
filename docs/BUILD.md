@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Visual Studio 2026 / MSVC v145 with Desktop development with C++, ATL for x64,
+- Visual Studio 2026 / MSVC v145 with Desktop development with C++, ATL for the target x64/x86 architecture,
   and a Windows SDK. The prepared build was tested with VS 18 Community / MSVC 14.52.
 - PowerShell and Git (Git is only needed for repository work).
 - foobar2000 SDK 2026-10-01, WTL, SoundTouch and picojson sources/build inputs are

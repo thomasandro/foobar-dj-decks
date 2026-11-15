@@ -47,7 +47,7 @@ $labelLast=$source.IndexOf('    void CDjPanel::UpdateQueue(', $labelFirst)
 if($labelFirst -lt 0 -or $labelLast -lt $labelFirst){throw 'Queue label extraction anchors changed'}
 [IO.File]::WriteAllText((Join-Path $output 'queue-label-generated.cpp'),'#include "../../tests/queue_label_fixture.h"'+"`n"+$source.Substring($labelFirst,$labelLast-$labelFirst)+"`n"+'#include "../../tests/queue_label_cases.inc"',[Text.UTF8Encoding]::new($false))
 $previewFirst=$source.IndexOf('    void CDjPanel::ScanPreviewOverview(')
-$previewLast=$source.IndexOf('    void CDjPanel::SilenceMenu(', $previewFirst)
+$previewLast=$source.IndexOf('    void CDjPanel::RefreshTrimPreparations(', $previewFirst)
 if($previewFirst -lt 0 -or $previewLast -lt $previewFirst){throw 'Preview extraction anchors changed'}
 [IO.File]::WriteAllText((Join-Path $output 'preview-generated.cpp'),'#include "../../tests/preview_fixture.h"'+"`n"+$source.Substring($previewFirst,$previewLast-$previewFirst)+"`n"+'#include "../../tests/preview_cases.inc"',[Text.UTF8Encoding]::new($false))
 $prepFirst=$source.IndexOf('    struct PreparedTrack{')
@@ -62,12 +62,21 @@ $seekFirst=$source.IndexOf('void CDjPanel::SeekDeck(')
 $seekLast=$source.IndexOf('void CDjPanel::EnsureEngine()', $seekFirst)
 if($seekFirst -lt 0 -or $seekLast -lt $seekFirst){throw 'Seek extraction anchors changed'}
 [IO.File]::WriteAllText((Join-Path $output 'seek-generated.cpp'),'#include "../../tests/seek_fixture.h"'+"`n"+$source.Substring($seekFirst,$seekLast-$seekFirst)+"`n"+'#include "../../tests/seek_cases.inc"',[Text.UTF8Encoding]::new($false))
+$loopFirst=$source.IndexOf('void CDjPanel::SaveLoopPoints(')
+$loopLast=$source.IndexOf('void CDjPanel::SeekDeck(', $loopFirst)
+if($loopFirst -lt 0 -or $loopLast -lt $loopFirst){throw 'Loop extraction anchors changed'}
+[IO.File]::WriteAllText((Join-Path $output 'loop-generated.cpp'),'#include "../../tests/seek_fixture.h"'+"`n"+$source.Substring($loopFirst,$loopLast-$loopFirst)+"`n"+'#include "../../tests/loop_controls_cases.inc"',[Text.UTF8Encoding]::new($false))
+$ioFirst=$source.IndexOf('static std::string ReadSessionFile(');$ioLast=$source.IndexOf('void CDjPanel::SaveSession()', $ioFirst)
+[IO.File]::WriteAllText((Join-Path $output 'loop-storage-io.inc'),$source.Substring($ioFirst,$ioLast-$ioFirst),[Text.UTF8Encoding]::new($false))
 $prior = $env:DJ_DECKS_VCVARS
 try {
     $env:DJ_DECKS_VCVARS = $vcvars
     & cmd.exe /d /c (Join-Path $PSScriptRoot 'test-native.cmd')
     if ($LASTEXITCODE -ne 0) { throw 'Native tests failed.' }
 } finally { $env:DJ_DECKS_VCVARS = $prior }
+& (Join-Path $PSScriptRoot 'test-settings.ps1') -Architecture $Architecture
+& (Join-Path $PSScriptRoot 'test-tooltips.ps1') -Architecture $Architecture
+& (Join-Path $PSScriptRoot 'test-session-bundle.ps1') -Architecture $Architecture
 Write-Output 'All native tests passed. No foobar host was launched.'
 if ($env:DJ_STEM_ENGINE) {
     & (Join-Path $env:DJ_STEM_ENGINE 'venv/Scripts/python.exe') (Join-Path $repo 'tests/test-stem-backend.py')

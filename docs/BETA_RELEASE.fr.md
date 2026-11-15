@@ -1,9 +1,9 @@
-# DJ Decks 0.34.1-beta.1 — bêta x64 et x86
+# DJ Decks 0.37.0-beta.1 — bêta x64 et x86
 
-Choisir le paquet correspondant à l’architecture de foobar2000 2.x. Sources complètes communes aux deux architectures ; changelog détaillant aussi les versions intermédiaires non publiées.
+Nouveautés depuis 0.34.1-beta.1 : boucles A/B indépendantes et points sauvegardés par morceau/sous-piste ; bouton Q pour caler les nouveaux points et recaler les points existants ; fenêtre de réglages à six onglets ; infobulles allégées et correction du dessin/contraste des cases ; fichiers JSON pour enregistrer/charger les deux playlists et l’état des platines, avec récupération avant chargement.
 
-Nouveautés : sortie casque configurable, préécoute indépendante dans les playlists (8/15 secondes ou 8+8), forme d’onde approximative du morceau entier avec clic pour changer de position, suppression facultative des silences de début/fin et préchargement AUTO, déplacement multiple avec Maj corrigé, alternance AUTO conservée lors des déplacements dans les morceaux.
+Choisir le paquet correspondant à foobar : [x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-win-x64.fb2k-component) ou [x86](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-win-x86.fb2k-component). [Sources communes complètes](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-source.zip).
 
-Silences : options désactivées par défaut, seuil -60 dBFS réglable. Recharger les morceaux déjà chargés après un changement. Fichiers sources inchangés. Les stems restent expérimentaux. Le moteur optionnel nécessite Windows 64 bits, y compris avec foobar 32 bits. Latence possible avec un casque Bluetooth.
+L’utilisateur confirme le fonctionnement x64 et les fichiers de session. Les deux architectures sont compilées et leurs tests natifs passent ; le retour en conditions réelles x86 reste attendu. Les stems restent expérimentaux. La restauration complète revient en pause, boucles/AUTO/Cue coupés. Aucun audio/stem n’est embarqué : les morceaux doivent rester accessibles aux mêmes chemins. Ne pas partager un JSON sans vérifier ses chemins privés.
 
-Fonctionnement x64 confirmé par l’utilisateur. Compilation et tests natifs x64/x86 vérifiés ; retours en utilisation réelle x86 attendus. Voir RELEASE_NOTES.md et KNOWN_ISSUES.md pour les limites.
+Voir [boucles/Q](AB_LOOPS.md), [réglages](SETTINGS.md), [fichiers de session](SESSION_FILES.md) et [changelog détaillé](../CHANGELOG.md), y compris les versions intermédiaires non publiées.

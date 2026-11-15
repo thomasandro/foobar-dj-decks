@@ -32,5 +32,9 @@ int main(){
      p.AutomationTick();assert(p.loads[0]==0&&p.m_autoArmed[0]);p.prepared[0]=true;p.AutomationTick();assert(p.loads[0]==1&&p.m_deck[0].playing);}
     {CDjPanel p;p.m_alternate=true;p.m_deck[0].playing=true;p.m_deck[0].trimEnd=80;p.m_deck[0].framesPlayed=7500;
      p.AutomationTick();assert(p.m_autoFade.active&&p.m_deck[1].playing);}
+    {CDjPanel p;p.m_alternate=true;p.m_deck[0].loop={10,20,true};p.m_deck[0].playing=true;p.m_deck[0].framesPlayed=9900;
+     p.AutomationTick();assert(p.m_alternate&&!p.m_autoFade.active&&p.loads[0]==0);p.m_deck[0].loop.enabled=false;p.AutomationTick();assert(p.m_autoFade.active);}
+    {CDjPanel p;p.m_chain[0]=true;p.m_deck[0].loop={10,20,true};p.m_deck[0].eof=true;p.m_queue[0]={{"first",0},{"second",0}};
+     p.AutomationTick();assert(p.loads[0]==0);}
     std::cout<<"Actual automatic playback controller: independent queues, A/B/A exhaustion, pause, EOF, errors, released files, speed-aware fades, trimmed end and preparation readiness passed\n";
 }

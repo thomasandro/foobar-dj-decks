@@ -9,5 +9,6 @@ int main(){
      assert(p.m_deck[0].playing&&p.m_deck[1].playing&&p.m_queueCurrent[0]==3&&p.m_queueCurrent[1]==5);
      p.SeekDeck(1,99);assert(p.m_autoFade.frames==1000&&p.m_alternate&&p.m_autoFade.start==p.m_crossfade.load());}
     {CDjPanel p;p.m_deck[0].trimStart=2;p.m_deck[0].trimEnd=80;p.SeekDeck(0,0);assert(p.m_deck[0].framesPlayed==2000&&p.m_alternate);}
+    {CDjPanel p;p.m_deck[0].loop={10,20,true};p.SeekDeck(0,15);assert(p.m_deck[0].loop.enabled);p.SeekDeck(0,25);assert(!p.m_deck[0].loop.enabled&&p.m_alternate);}
     std::cout<<"Actual SeekDeck: AUTO mode, queues and play/pause preserved; pending/empty decks, trimmed start and continuous active-fade replanning passed (mock decoders)\n";
 }

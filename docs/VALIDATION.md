@@ -1,3 +1,39 @@
+# Release validation — 0.37.0-beta.1
+
+The user confirmed x64 installation and the new session-file workflow working. Both architectures compile and pass native release regression suites. These tests cover the audio processing cases, queue/drop/persistence models, actual controller methods with mock services/readers, hidden settings/tooltip/control windows, parent-routed contrast drawing, loop bounds/Q, atomic file IO, malformed imports, recovery prerequisites and asynchronous preparation. No live x86 host installation/loading is claimed; external feedback remains welcome.
+
+Publication checks compare every complete-source archive entry to both build trees and each packaged DLL to its architecture-specific build. Foobar is not accessed, launched, captured or monitored by release work. The historical local validation notes below describe development checks rather than missing release artifacts.
+
+# Local candidate — 0.37.0-beta.1, x64 only
+
+Targeted session tests run the actual capture/apply methods with mock readers, strict document parsing and actual atomic IO on generated temporary files. Coverage includes Unicode/BOM, ordering/duplicates/subsongs, version/type/size/queue limits, original-file preservation on a locked target, capacity checks before mutation, lists-only playback preservation, complete paused restoration, missing/empty decks, async import intent and the actual existing preparation scheduler/load wrapper. Existing settings/bindings and loop/storage/layout regressions pass. File chooser and real media loading remain for user verification in foobar. No host capture, monitoring, physical audio or scrobbles are used; x86 is not compiled.
+
+# Local candidate — 0.36.2-beta.1, x64 only
+
+Only x64 is compiled/tested for this change; x86 is deliberately deferred at the user’s request. Settings regressions now dispatch WM_DRAWITEM through the real content-parent window, reproducing the previously missed routing defect. Loop regressions execute the actual Q activation function, with mock readers/grid inputs, and check persistence, transport preservation, unavailable-grid rollback, A-only and final-line handling. Existing native loop/storage/layout tests are included. No foobar access/capture/monitoring; live confirmation remains for the user.
+
+# Local candidate — 0.36.1-beta.1
+
+Targeted tooltip and settings regressions cover the actual tooltip registration, delay/style policy, actual bitmap reuse/resize, hidden native window lifecycle, bound toggle behavior and bright text pixels. The optional old/new renderer benchmark checks pixel identity under a small dirty clip. Native tests do not establish live-host hover latency; user confirmation remains needed. No host, audio-device output, screen capture or monitoring is used.
+
+# Local candidate — 0.36.0-beta.1
+
+`scripts/test-settings.ps1 -Architecture x64|x86` builds its own hidden windows, executes the actual SettingsValues/SettingsChanged methods with mock configuration/services, and checks all six bilingual categories, command routing, custom-value retention, safe cue selection, trim/fade/Q, window reuse, resize, focus, close/reopen and owner teardown. No host, physical audio device, scrobble or capture is used. Live UI validation in foobar remains for the user. Existing loop regressions are retained.
+
+# Local candidate — 0.35.2-beta.1
+
+Targeted loop regression suite now also checks beat snapping and hidden control layout. Coverage includes the shared display-grid selector, non-zero phases, current-zoom strides, admissible source bounds, actual snapped A/B edits and saves, no-grid failure preserving previous points, persistence IO and existing loop boundaries. The unchanged audio-processing engine retains prior validation. Live-host checking of the Q button remains for the user. No foobar access, capture or monitoring.
+
+# Local candidate — 0.35.1-beta.1
+
+Both architectures are checked with `scripts/test-loop-storage.ps1 -Architecture x64|x86`: actual persistence/UI controls, original atomic file IO (including failed replacement preserving the existing file), restart simulation through fresh JSON parsing, Unicode/subsong separation, A-only points, overwrite, deletion, malformed and trimmed bounds, lock-free save and non-fatal write failure. Existing loop-boundary regressions are included. No host was accessed, launched, captured or monitored. Live persistence validation in foobar remains for the user.
+
+# Local candidate — 0.35.0-beta.1
+
+x64 full native suite passed; the final loop command regression also passed after adding non-fatal notices and the completed-fade activation guard. Both architectures compile. The final x86 full native suite also passed. A/B loop listening quality remains to be checked in the host by the user.
+
+Coverage: actual A/B commands, independent points, minimum interval, pause/play retention, unavailable seeking, active/completed fade guard, preserving playback errors, seek-outside disable, AUTO wait/resume, 5400 shared-block simulations across 18 rate/speed/original/stem combinations, lookahead reset and hidden control layout. Existing audio processing cases remain included. No foobar access, capture or monitoring in these checks.
+
 # Current validation — 0.34.1-beta.1
 
 User-confirmed: x64 installation, real-track playback, save/restore, and successful

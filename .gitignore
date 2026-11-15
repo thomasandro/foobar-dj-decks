@@ -30,3 +30,8 @@ __pycache__/
 /test-grid-save.json
 /foo_dj-session.json
 /foo_dj-grids.json
+
+/foo_dj-loops.json
+
+/foo_dj-before-import.json
+*.dj-decks.json

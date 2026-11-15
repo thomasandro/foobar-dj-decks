@@ -19,6 +19,8 @@ int wmain(int argc,wchar_t** argv) {
         for(int deck=0;deck<2;++deck) {
             auto L=MakeLayout(deck,client);
             assert(L.wave.Width()>0 && L.wave.Height()>0);
+            assert(L.loop[3].right<L.loopSnap.left&&L.loopSnap.right<=L.deck.right&&L.loopSnap.Width()>=30);
+            for(int k=0;k<4;++k){assert(L.loop[k].top>L.wave.bottom&&L.loop[k].bottom<L.gridControl[0].top);assert(L.loop[k].Width()>0);if(k)assert(L.loop[k-1].right<L.loop[k].left);}
             assert(L.queue[0].bottom<=L.queue[1].top);
             assert(L.queue[1].bottom<L.wave.top);
             assert(L.queue[0].right<L.queueOpen.left);

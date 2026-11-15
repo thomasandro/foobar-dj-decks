@@ -1,4 +1,7 @@
+#include "../sdk/foobar2000/foo_dj/session_bundle.h"
 class CDjPanel{
+    bool m_applyImport[2]={};dj_session::Deck m_importDeck[2];
+
 public:
     bool m_autoChanging=false,m_alternate=false,m_chain[2]={};int m_queueCurrent[2]={0,0};std::vector<dj_queue::Item> m_queue[2];
     std::mutex m_lock;Deck m_deck[2];std::wstring m_error[2];unsigned m_outRate=48000;int loads[2]={},engine=0;double sought[2]={-1,-1};

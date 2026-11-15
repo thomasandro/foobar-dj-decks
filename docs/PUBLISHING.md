@@ -24,3 +24,7 @@ First x64 beta: v0.28.0-beta.1, publication authorized on 2026-11-15 after succe
 ## 0.34.1-beta.1
 
 Publication of x64/x86 packages, common matching sources, detailed changelog and Hydrogenaudio announcement explicitly authorized by the user on 2026-11-15. No foobar access, capture or monitoring.
+
+## 0.37.0-beta.1
+
+The user explicitly authorized compiling x86, publishing both GitHub packages/sources/changelog and announcing this release on Hydrogenaudio on 2026-11-15. No foobar access/capture/monitoring.

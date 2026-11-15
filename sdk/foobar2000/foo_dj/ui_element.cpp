@@ -32,6 +32,11 @@
 #include "queue_duration_hook.h"
 #include "auto_mix.h"
 #include "queue_window.h"
+#include "settings_window.h"
+#include "tooltip_policy.h"
+#include "session_bundle_io.h"
+#include <commdlg.h>
+#pragma comment(lib,"comdlg32.lib")
 #include "stem_cache.h"
 #include "stem_job.h"
 #include "stem_cache_manager.h"
@@ -41,6 +46,8 @@
 #include "preview_window.h"
 #include "preview_overview.h"
 #include "silence_trim.h"
+#include "ab_loop.h"
+#include "loop_storage.h"
 #include "scrobble_bridge.h"
 #include <ctime>
 #include <commctrl.h>
@@ -82,6 +89,8 @@ namespace {
     static cfg_int cfg_previewMode({0xd60e2704,0x66f1,0x4a72,{0xa1,0x32,0x48,0x5e,0x1a,0x91,0x77,0x24}},0);
     static cfg_int cfg_trimHead({0xf8071201,0x5312,0x45e9,{0x91,0x18,0x60,0x7e,0x17,0x47,0x0c,0x91}},0);
     static cfg_int cfg_trimTail({0xf8071202,0x5312,0x45e9,{0x91,0x18,0x60,0x7e,0x17,0x47,0x0c,0x91}},0);
+    static cfg_int cfg_loopSnapA({0xa1b2035c,0x6135,0x4011,{0x81,0x75,0x35,0x02,0x10,0x00,0x00,0x01}},0);
+    static cfg_int cfg_loopSnapB({0xa1b2035c,0x6135,0x4011,{0x81,0x75,0x35,0x02,0x10,0x00,0x00,0x02}},0);
     static cfg_int cfg_trimDb({0xf8071203,0x5312,0x45e9,{0x91,0x18,0x60,0x7e,0x17,0x47,0x0c,0x91}},-60);
     static dj_silence::Options TrimOptions(){return {cfg_trimHead.get()!=0,cfg_trimTail.get()!=0,std::clamp((int)cfg_trimDb.get(),-120,-1)};}
     static std::atomic<bool> g_english{false};
@@ -128,6 +137,7 @@ namespace {
 
 	// Etat d'un deck (platine).
 	struct Deck {
+        dj_loop::Region loop;
 		std::shared_ptr<dj_stems::Reader> stems;
         unsigned sourceRate=0,sourceChannels=0;
         dj_listening::Clock listening;
@@ -378,6 +388,7 @@ namespace {
 		CRect cover;
 		CRect title;      // "DECK A"
 		CRect gridControl[4];
+        CRect loop[4],loopSnap;
         CRect pitch[3];
         CRect matchKey;
         CRect analyse[3];
@@ -435,9 +446,11 @@ namespace {
             L.stemSolo[n]=CRect(x,d.top+246,x+22,d.top+270);
             L.stemVolume[n]=CRect(x+24,d.top+246,end,d.top+270);
         }
-        const int waveTop=d.top+278,waveBottom=d.bottom-164;
+        const int waveTop=d.top+278,waveBottom=d.bottom-196;
         L.wave=CRect(left,waveTop,right-46,waveBottom);
         L.vol=CRect(right-38,waveTop,right,waveBottom);
+        for(int k=0;k<4;++k){int w=(right-left-40)/4;L.loop[k]=CRect(left+k*w,d.bottom-190,left+(k+1)*w-4,d.bottom-160);}
+        L.loopSnap=CRect(right-36,d.bottom-190,right,d.bottom-160);
         const int row=d.bottom-154;
         for(int k=0;k<4;++k) L.gridControl[k]=CRect(left+k*36,row,left+k*36+32,row+36);
         L.pitch[0]=CRect(left+148,row,left+176,row+36);
@@ -560,7 +573,7 @@ namespace {
             for(int i=0;i<2;++i) {
                 auto L=MakeLayout(i,rc);
                 for(auto r:{L.btn[0],L.btn[1],L.analyse[0],L.analyse[1],L.analyse[2],L.release,L.headphones,L.automation,L.stemPrepare,L.stem[0],L.stem[1],L.stem[2],L.stem[3],L.stemSolo[0],L.stemSolo[1],L.stemSolo[2],L.stemSolo[3],L.queueOpen,L.zoomOut,L.zoomIn,
-                    L.gridControl[0],L.gridControl[1],L.gridControl[2],L.gridControl[3],L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key,L.beat,L.sync,L.range})
+                    L.loopSnap,L.loop[0],L.loop[1],L.loop[2],L.loop[3],L.gridControl[0],L.gridControl[1],L.gridControl[2],L.gridControl[3],L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key,L.beat,L.sync,L.range})
                     if(r.PtInRect(point))return r;
             }
             return CRect(0,0,0,0);
@@ -570,10 +583,12 @@ namespace {
                 dj_skin::surface(dc,r,edge,false,true,r==m_pressedButton);
             else BaseDrawControl(dc,r,fill,edge);
         }
-        void OnMouseLeave() { m_trackingMouse=false;m_hotButton.SetRectEmpty();Invalidate(); }
-        void OnCaptureChanged(HWND) { m_pressedButton.SetRectEmpty();m_drag=0;Invalidate(); }
+        void InvalidateButton(const CRect& rect){if(rect.IsRectEmpty())return;auto dirty=dj_tooltip::feedback(rect);InvalidateRect(&dirty,FALSE);}
+        void OnMouseLeave() { m_trackingMouse=false;auto old=m_hotButton;m_hotButton.SetRectEmpty();InvalidateButton(old); }
+        void OnCaptureChanged(HWND) {auto old=m_pressedButton;bool dragging=m_drag!=0;m_pressedButton.SetRectEmpty();m_drag=0;if(dragging)Invalidate();else InvalidateButton(old);}
 		BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 		void OnPaint(CDCHandle);
+        CBitmap m_paintBuffer;int m_paintWidth=0,m_paintHeight=0;
         struct Tip { CRect rect; std::wstring text; };
         HWND m_tooltip=nullptr;
         CRect m_tipClient={0,0,0,0};
@@ -607,6 +622,10 @@ namespace {
 
 		void LoadDeck(int deck, const char * path, t_uint32 subsong);
 		void SaveSession();
+        dj_session::Bundle CaptureBundle(bool full);
+        void ApplyBundle(const dj_session::Bundle& bundle,bool restoreDecks);
+        void ExportBundle(bool full);void ImportBundle(bool recovery=false);
+        bool m_applyImport[2]={};dj_session::Deck m_importDeck[2];
         std::unique_ptr<dj_stems::Job> m_stemJob;
         std::shared_ptr<abort_callback_impl> m_stemAbort;
         int m_stemOwner=-1;
@@ -636,6 +655,16 @@ namespace {
         void SeekPreview(double seconds);
         void PreviewTick();
         void CueMenu(CPoint point);
+        DjSettingsWindow m_settings;
+        struct SettingsDevice{std::wstring name;GUID backend,device;};
+        std::vector<SettingsDevice> m_settingsDevices;
+        std::wstring m_settingsDeviceError;
+        void OpenSettings(int page=-1);
+        void RefreshSettingsDevices();
+        std::vector<dj_settings::Item> SettingsValues(int page);
+        void SettingsChanged(int id,int value);
+        void SettingsCommand(int choice);
+        void RefreshTrimPreparations();
         struct PrepareRequest{int deck=0;dj_queue::Item item;dj_silence::Options options;std::string key;};
         std::mutex m_prepareMutex;std::string m_prepareKey[2];std::shared_ptr<PreparedTrack> m_prepared[2];
         bool m_pendingLoad[2]={},m_pendingPlay[2]={},m_prepareSuspended[2]={};double m_pendingSeek[2]={-1,-1};dj_queue::Item m_pendingItem[2];
@@ -800,6 +829,14 @@ namespace {
 		void TogglePlay(int deck);
 		void PlayBoth();
 		void SeekDeck(int deck, double seconds);
+        void EditLoop(int deck,int action);
+        void SetLoopSnap(int deck,bool enabled);
+        bool SnapLoopPoint(int deck,double position,double lower,double upper,double& target);
+        bool m_loopSnap[2]={cfg_loopSnapA.get()!=0,cfg_loopSnapB.get()!=0};
+        dj_loop::Region m_cacheLoop[2];
+        std::wstring m_loopNotice[2];
+        picojson::object m_loopLibrary;
+        void SaveLoopPoints(int deck,const dj_loop::Region& points);
 		void EnsureEngine();
 		void StopEngine();
 		void StopWaveThread(int deck);
@@ -906,6 +943,7 @@ namespace {
 	}
 
 	void CDjPanel::OnDestroy() {
+        m_settings.close();m_settings.values={};m_settings.changed={};
         if(m_tooltip) { ::DestroyWindow(m_tooltip); m_tooltip=nullptr; }
 		for(auto& window:m_queueWindow)if(window.m_hWnd)window.DestroyWindow();
 		KillTimer(kTimerId);
@@ -1001,6 +1039,7 @@ namespace {
 				own.src.clear(); own.srcPos = 0; own.pending.clear(); own.pendingPos = 0;
 				own.eof = false; own.stretch.reset(); own.stretchFlushed = false;
 				own.framesPlayed = target * m_outRate;
+                if(own.loop.enabled&&!own.loop.contains(target))own.loop.enabled=false;
 				m_speed[deck] = speed; m_error[deck].clear();
 				m_gridStamp[0] = m_gridStamp[1] = 0;
 			} catch (const std::exception & e) { pfc::stringcvt::string_wide_from_utf8 text(e.what()); m_error[deck] = text.get_ptr(); return; }
@@ -1162,16 +1201,10 @@ namespace {
 		}
 
 		// Solid: audio phase accepted by SYNC. Dotted: tagged spacing only, never a SYNC guarantee.
-		dj_beats::Grid displayGrid = m_grid[deck];
-		const bool manual = m_manualGrid[deck];
-		if (manual) displayGrid = dj_beats::manual(m_cacheBpm[deck],m_manualPhase[deck]);
-		const bool detected = displayGrid.valid;
-		const double bpm = m_cacheBpm[deck];
-		const bool tagged = std::isfinite(bpm) && bpm >= 40 && bpm <= 250;
-		if (!detected && tagged) {
-			displayGrid.period = 60.0 / bpm;
-			displayGrid.valid = true;
-		}
+		bool indicative=false;
+        const bool manual=m_manualGrid[deck];
+        const auto displayGrid=dj_beats::displayed(m_grid[deck],m_cacheBpm[deck],manual,m_manualPhase[deck],indicative);
+        const bool detected=!indicative;
 		if (displayGrid.valid) {
 			const auto ticks = dj_beats::ticks(displayGrid, t0, span, width);
 			const COLORREF markerColor = detected ? Blend(DeckAccent(deck), kText, 0.45) : RGB(130,148,169);
@@ -1204,6 +1237,13 @@ namespace {
 			CRect playhead(px - 1, inner.top, px + 1, inner.bottom);
 			dc.FillRect(&playhead, head);
 		}
+        const auto& region=m_cacheLoop[deck];
+        for(int k=0;k<2;++k){double t=k?region.b:region.a;if(t<0||t<t0||t>t0+span)continue;
+            int x=inner.left+(int)((t-t0)*width/span);x=(std::min)((int)inner.right-2,(std::max)((int)inner.left,x));
+            FillBox(dc,CRect(x,inner.top,x+2,inner.bottom),region.enabled?RGB(120,255,160):kText);
+            CRect label(x+3,inner.top+18,(std::min)((int)inner.right,x+22),inner.top+36);dc.SetTextColor(kText);dc.DrawText(k?L"B":L"A",-1,&label,DT_SINGLELINE);
+        }
+
 	}
 
 	// ---------------------------------------------------------------- dessin
@@ -1218,9 +1258,8 @@ namespace {
 
 		CDC mem;
 		mem.CreateCompatibleDC(dc);
-		CBitmap bitmap;
-		bitmap.CreateCompatibleBitmap(dc, rc.Width(), rc.Height());
-		HBITMAP oldBitmap = mem.SelectBitmap(bitmap);
+		if(!m_paintBuffer.m_hBitmap||m_paintWidth!=rc.Width()||m_paintHeight!=rc.Height()){m_paintBuffer.DeleteObject();m_paintBuffer.CreateCompatibleBitmap(dc,rc.Width(),rc.Height());m_paintWidth=rc.Width();m_paintHeight=rc.Height();}
+        HBITMAP oldBitmap = mem.SelectBitmap(m_paintBuffer);
 		CRect dirty; dc.GetClipBox(&dirty); mem.IntersectClipRect(&dirty);
 
 		CBrush background;
@@ -1237,12 +1276,13 @@ namespace {
         const bool en=g_english.load();
         if(m_tooltip && client==m_tipClient && en==m_tipEnglish) return;
         if(!m_tooltip) {
-            m_tooltip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,
+            m_tooltip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,dj_tooltip::style,
                 CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,m_hWnd,nullptr,core_api::get_my_instance(),nullptr);
             if(!m_tooltip) return;
             SendMessageW(m_tooltip,TTM_SETMAXTIPWIDTH,0,420);
-            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_INITIAL,450);
-            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_AUTOPOP,14000);
+            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_INITIAL,dj_tooltip::initial);
+            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_AUTOPOP,dj_tooltip::autopop);
+            SendMessageW(m_tooltip,TTM_SETDELAYTIME,TTDT_RESHOW,dj_tooltip::reshow);
         }
         for(size_t n=0;n<m_tips.size();++n) { TOOLINFOW ti={sizeof(ti)}; ti.hwnd=m_hWnd;ti.uId=n+1;SendMessageW(m_tooltip,TTM_DELTOOLW,0,(LPARAM)&ti); }
         m_tips.clear(); m_tipClient=client;m_tipEnglish=en;
@@ -1264,6 +1304,11 @@ namespace {
             add(L.analyse[0],L"Calculer le BPM avec foo_bpm. La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using foo_bpm. Pauses and releases the file for tag writing. Resume after saving the result.");
             add(L.analyse[1],L"Calculer la tonalit\u00e9 avec foo_musical_key. Reprendre la lecture apr\u00e8s la fin de l'analyse et l'enregistrement des tags.",L"Calculate key using foo_musical_key. Resume after analysis and tag writing have finished.");
             add(L.analyse[2],L"Actualiser les tags : relire le BPM et la tonalit\u00e9 et afficher les valeurs. Ne lance pas d'analyse audio.",L"Refresh tags: read BPM and key and show their values. Does not analyse audio.");
+            add(L.loopSnap,L"Q : aligner A/B sur le repère affiché le plus proche (selon le zoom). Grille manuelle ou estimée ; pointillés : phase indicative. Activer Q recale aussi les points existants et les sauvegarde.",L"Q: snap A/B to the nearest displayed line (zoom-dependent). Manual/estimated grid; dotted lines have indicative phase. Enabling Q also snaps and saves existing points.");
+            add(L.loop[0],L"Poser le début A à la position actuelle. Boucle minimale : 100 ms.",L"Set loop start A at the current position. Minimum loop: 100 ms.");
+            add(L.loop[1],L"Poser la fin B à la position actuelle, après A. Activer ensuite la boucle.",L"Set loop end B at the current position, after A. Then enable the loop.");
+            add(L.loop[2],L"Activer/désactiver la boucle A/B. AUTO attend pendant la boucle. Un clic hors de la boucle la désactive.",L"Enable/disable the A/B loop. AUTO waits while looping. Seeking outside disables it.");
+            add(L.loop[3],L"Effacer les points A/B de cette platine.",L"Clear this deck’s A/B points.");
             add(L.gridControl[0],L"D\u00e9caler la grille de -10 ms. Maj : -1 ms.",L"Shift beat grid -10 ms. Shift: -1 ms.");
             add(L.gridControl[1],L"Temps ici : ancrer un battement sur la position actuelle.",L"Beat here: anchor the grid at the current position.");
             add(L.gridControl[2],L"D\u00e9caler la grille de +10 ms. Maj : +1 ms.",L"Shift beat grid +10 ms. Shift: +1 ms.");
@@ -1287,7 +1332,7 @@ namespace {
         add(PlayBothRect(client),L"Inverser les deux \u00e9tats : lecture ensemble, pause ensemble ou \u00e9change de la platine en lecture.",L"Toggle both states: play together, pause together or swap the playing deck.");
         CRect fader=FaderStrip(client);fader.left=FaderLeft(client)-10;fader.right=FaderRight(client)+10;
         add(fader,L"Crossfader : doser les platines A et B.",L"Crossfader: blend decks A and B.");
-        add(LanguageRect(client,false),L"Réglages : langue, thème, couleurs des decks et cache des stems. DJ Decks " FOO_DJ_VERSION_W,L"Settings: language, theme, deck colors and stem cache. DJ Decks " FOO_DJ_VERSION_W);
+        add(LanguageRect(client,false),L"Réglages : fenêtre flottante à onglets, apparence, audio, casque, playlists, lecture et stems. DJ Decks " FOO_DJ_VERSION_W,L"Settings: floating tabs for appearance, audio, headphones, playlists, playback and stems. DJ Decks " FOO_DJ_VERSION_W);
         add(LanguageRect(client,true),L"Interface et infobulles en anglais.",L"English interface and tooltips.");
         for(size_t n=0;n<m_tips.size();++n) {
             TOOLINFOW ti={sizeof(ti)};ti.uFlags=TTF_SUBCLASS;ti.hwnd=m_hWnd;ti.uId=n+1;ti.rect=m_tips[n].rect;ti.lpszText=LPSTR_TEXTCALLBACKW;
@@ -1328,12 +1373,14 @@ namespace {
 					m_cacheLength[i] = dk.length;
 					m_cacheBpm[i] = dk.bpmValue;
 					m_trueElapsed[i] = (double)dk.framesPlayed / (double)(m_outRate?m_outRate:48000);
-					m_cacheWave[i] = dk.wave;
+					m_cacheWave[i] = dk.wave; m_cacheLoop[i]=dk.loop;
 
 					std::wstring text;
 					if (!m_error[i].empty()) {
 						text = dj_language::message(m_error[i],g_english.load());
-					} else if (dk.loaded) {
+					} else if (!m_loopNotice[i].empty()) {
+                        text=m_loopNotice[i];
+                    } else if (dk.loaded) {
 						wchar_t extra[96];
 						if (dk.rate != m_outRate) {
 							swprintf_s(extra, L"  -  %u Hz  ->  %u Hz", dk.rate, m_outRate);
@@ -1357,7 +1404,7 @@ namespace {
 			if (m_cachePlaying[i]) {
 				double shown = m_cacheElapsed[i] + dt * m_speed[i].load();
 				const double err = m_trueElapsed[i] - shown;
-				if (std::fabs(err) > 0.3) shown = m_trueElapsed[i];
+				if (m_cacheLoop[i].enabled || std::fabs(err) > 0.3) shown = m_trueElapsed[i];
 				else shown += err * 0.15;
 				m_cacheElapsed[i] = shown;
 			} else {
@@ -1438,7 +1485,16 @@ namespace {
             dc.SetTextColor(kMuted);
             if (!info.empty()) dc.DrawText(info.c_str(),-1,&infoRect,DT_NOPREFIX|DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
 
-			// Semitone transposition is independent of tempo; centre resets to zero.
+			DrawControl(dc,L.loopSnap,RGB(8,10,14),m_loopSnap[i]?accent:kMuted);dc.SetTextColor(m_loopSnap[i]?accent:kMuted);dc.DrawText(L"Q",-1,&L.loopSnap,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+            // Independent loop controls, with millisecond positions in the two point buttons.
+            for(int k=0;k<4;++k){
+                const auto& loop=m_cacheLoop[i];bool on=k==0?loop.a>=0:k==1?loop.b>=0:k==2?loop.enabled:false;
+                DrawControl(dc,L.loop[k],RGB(8,10,14),on?accent:kMuted);dc.SetTextColor(on?accent:kText);
+                std::wstring label=k==0?L"A":k==1?L"B":k==2?(loop.enabled?L"A-B ON":L"A-B OFF"):L"×";
+                if(k<2){double t=k==0?loop.a:loop.b;if(t>=0){wchar_t v[40];swprintf_s(v,L" %d:%05.2f",(int)(t/60),std::fmod(t,60.));label+=v;}}
+                dc.DrawText(label.c_str(),-1,&L.loop[k],DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+            }
+            // Semitone transposition is independent of tempo; centre resets to zero.
             for(int k=0;k<3;++k) DrawControl(dc,L.pitch[k],RGB(37,45,58),accent);
             dc.SetTextColor(kText);
             dc.DrawText(L"-",-1,&L.pitch[0],DT_CENTER|DT_VCENTER|DT_SINGLELINE);
@@ -1627,54 +1683,9 @@ namespace {
 		GetClientRect(&rc);
 
         m_pressedButton=HitButton(point,rc);
-        if(!m_pressedButton.IsRectEmpty()) {m_hotButton=m_pressedButton;SetCapture();Invalidate();UpdateWindow();}
-        if(LanguageRect(rc,false).PtInRect(point)) {
-            HMENU menu=CreatePopupMenu(),languages=CreatePopupMenu();
-            AppendMenuW(languages,MF_STRING|(!g_english.load()?MF_CHECKED:0),1,L"Fran\u00e7ais");
-            AppendMenuW(languages,MF_STRING|(g_english.load()?MF_CHECKED:0),2,L"English");
-            AppendMenuW(menu,MF_POPUP,(UINT_PTR)languages,g_english.load()?L"Language":L"Langue");
-            CPoint screen=point;ClientToScreen(&screen);
-            HMENU themes=CreatePopupMenu();bool en=g_english.load();
-            AppendMenuW(themes,MF_STRING|(!dj_skin::flat.load()?MF_CHECKED:0),10,en?L"Glossy":L"Brillant");
-            AppendMenuW(themes,MF_STRING|(dj_skin::flat.load()?MF_CHECKED:0),11,en?L"Flat / subdued":L"Plat / sobre");
-            AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_POPUP,(UINT_PTR)themes,en?L"Theme":L"Thème");
-            const wchar_t* fr[]={L"Cyan",L"Orange",L"Bleu",L"Violet",L"Vert",L"Rose / rouge",L"Or",L"Gris"};
-            const wchar_t* eng[]={L"Cyan",L"Orange",L"Blue",L"Purple",L"Green",L"Rose / red",L"Gold",L"Grey"};
-            for(int deck=0;deck<2;++deck){HMENU colors=CreatePopupMenu();for(int n=0;n<8;++n)AppendMenuW(colors,MF_STRING|(dj_skin::colorIndex[deck].load()==n?MF_CHECKED:0),100+deck*20+n,en?eng[n]:fr[n]);
-                AppendMenuW(menu,MF_POPUP,(UINT_PTR)colors,deck?(en?L"Deck B color":L"Couleur deck B"):(en?L"Deck A color":L"Couleur deck A"));}
-            AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,200,en?L"Stem cache…":L"Cache des stems…");
-            HMENU rg=CreatePopupMenu();const wchar_t* rgFr[]={L"Désactivé",L"Piste (gain + crête)",L"Album (gain + crête)"};const wchar_t* rgEn[]={L"Off",L"Track (gain + peak)",L"Album (gain + peak)"};
-            for(int n=0;n<3;++n)AppendMenuW(rg,MF_STRING|(g_replaygain.load()==n?MF_CHECKED:0),210+n,en?rgEn[n]:rgFr[n]);
-            AppendMenuW(menu,MF_POPUP,(UINT_PTR)rg,L"ReplayGain");
-            AppendMenuW(menu,MF_STRING|(g_scrobble.load()?MF_CHECKED:0),220,en?L"Scrobble audible decks via foo_scrobble":L"Scrobbler les platines audibles via foo_scrobble");
-            AppendMenuW(menu,MF_STRING,221,en?L"foo_scrobble diagnostic…":L"Diagnostic foo_scrobble…");
-            HMENU formats=CreatePopupMenu();const wchar_t* formatFr[]={L"Artiste - Titre (durée)",L"Titre - Artiste (durée)",L"Album | N° de piste. Artiste - Titre (durée)",L"Artiste - Titre"};const wchar_t* formatEn[]={L"Artist - Title (duration)",L"Title - Artist (duration)",L"Album | Track no. Artist - Title (duration)",L"Artist - Title"};
-            bool preset=false;for(int n=0;n<4;++n){bool checked=std::string(cfg_queueFormat.get().get_ptr())==dj_queue_format::presets[n];preset=preset||checked;AppendMenuW(formats,MF_STRING|(checked?MF_CHECKED:0),300+n,en?formatEn[n]:formatFr[n]);}
-            AppendMenuW(formats,MF_STRING|(!preset?MF_CHECKED:0),304,en?L"Custom format…":L"Format personnalisé…");AppendMenuW(formats,MF_SEPARATOR,0,nullptr);AppendMenuW(formats,MF_STRING|(cfg_queueNumbers.get()?MF_CHECKED:0),305,en?L"Show playlist position numbers":L"Afficher les numéros de position dans la liste");AppendMenuW(formats,MF_SEPARATOR,0,nullptr);AppendMenuW(formats,MF_STRING,306,en?L"Reload playlist metadata":L"Relire les métadonnées des playlists");AppendMenuW(menu,MF_POPUP,(UINT_PTR)formats,en?L"Playlist display":L"Affichage des playlists");
-            AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,400,en?L"Headphone cue…":L"Préécoute casque…");
-            AppendMenuW(menu,MF_STRING,500,en?L"Silence trimming / preload…":L"Silences / préchargement…");
-            auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,screen.x,screen.y,0,m_hWnd,nullptr);DestroyMenu(menu);
-            if(choice==500){m_pressedButton.SetRectEmpty();::ReleaseCapture();SilenceMenu(point);}
-            if(choice==400){m_pressedButton.SetRectEmpty();::ReleaseCapture();CueMenu(point);}
-            if(choice==221){m_pressedButton.SetRectEmpty();::ReleaseCapture();auto detected=dj_scrobble::probe();::MessageBoxW(m_hWnd,detected.message(en).c_str(),L"DJ Decks - foo_scrobble",MB_OK|MB_ICONINFORMATION);}
-            if(choice==306){m_queueInfoAttempted.clear();m_forceQueueInfo=true;for(int i=0;i<2;++i)UpdateQueue(i,m_queueWindow[i].list?m_queueWindow[i].selected():std::vector<size_t>{});}
-            if(choice>=300&&choice<=305){m_pressedButton.SetRectEmpty();::ReleaseCapture();QueueFormatMenu((int)choice);}
+        if(!m_pressedButton.IsRectEmpty()) {m_hotButton=m_pressedButton;SetCapture();InvalidateButton(m_pressedButton);UpdateWindow();}
+        if(LanguageRect(rc,false).PtInRect(point)){m_pressedButton.SetRectEmpty();::ReleaseCapture();OpenSettings();Invalidate();return;}
 
-            if(choice>=210&&choice<=212){g_replaygain=(int)choice-210;cfg_replaygain=(int)choice-210;}
-            if(choice==220){
-                bool enable=!g_scrobble.load();
-                if(enable&&!dj_scrobble::service().is_valid()){m_pressedButton.SetRectEmpty();::ReleaseCapture();auto detected=dj_scrobble::probe();::MessageBoxW(m_hWnd,detected.message(en).c_str(),L"DJ Decks - foo_scrobble",MB_OK|MB_ICONINFORMATION);}
-                else{g_scrobble=enable;cfg_scrobble=enable;g_scrobbleReady=false;{std::lock_guard<std::mutex> lock(m_lock);for(auto& d:m_deck)d.listening.discardUnsubmitted();}m_lastScrobbleTick=0;ScrobbleTick();}
-            }
-
-            if(choice==200){m_pressedButton.SetRectEmpty();::ReleaseCapture();std::set<std::wstring> keys;{std::lock_guard<std::mutex> lock(m_lock);for(int i=0;i<2;++i)if(m_deck[i].stems)keys.insert(dj_stems::wide(m_stemKey[i]));}if(m_stemJob)keys.insert(dj_stems::wide(m_stemJob->sourceKey));dj_stems::manageCache(m_hWnd,en,keys);for(int i=0;i<2;++i)CheckStems(i);}
-            if(choice==1 || choice==2){g_english=choice==2;cfg_language=choice==2;}
-            if(choice==10||choice==11){dj_skin::flat=choice==11;cfg_flat=choice==11;}
-            if(choice>=100&&choice<108){dj_skin::colorIndex[0]=(int)choice-100;cfg_colorA=(int)choice-100;}
-            if(choice>=120&&choice<128){dj_skin::colorIndex[1]=(int)choice-120;cfg_colorB=(int)choice-120;}
-            for(auto& window:m_queueWindow)if(window.m_hWnd)::RedrawWindow(window.m_hWnd,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
-            m_pressedButton.SetRectEmpty();::ReleaseCapture();Invalidate();return;
-        }
 		if (PlayBothRect(rc).PtInRect(point)) { PlayBoth(); Invalidate(); return; }
 
 		// Crossfader : on attrape le curseur
@@ -1688,7 +1699,9 @@ namespace {
 		for (int i = 0; i < 2; ++i) {
 			const DeckLayout L = MakeLayout(i, rc);
 
-			if(L.stemPrepare.PtInRect(point)){StemsMenu(i,point);return;}
+			if(L.loopSnap.PtInRect(point)){SetLoopSnap(i,!m_loopSnap[i]);return;}
+            for(int k=0;k<4;++k)if(L.loop[k].PtInRect(point)){EditLoop(i,k);return;}
+            if(L.stemPrepare.PtInRect(point)){StemsMenu(i,point);return;}
             for(int k=0;k<4;++k){
                 if(L.stemSolo[k].PtInRect(point)){SoloStem(i,k);return;}
                 if(L.stemVolume[k].PtInRect(point)){m_drag=10+i*4+k;SetCapture();SetStemVolumeFromX(i,k,point.x,rc);return;}
@@ -1698,7 +1711,7 @@ namespace {
             if(L.queueOpen.PtInRect(point) || L.queue[0].PtInRect(point) || L.queue[1].PtInRect(point)) { OpenQueue(i);return; }
             if(L.release.PtInRect(point)) { if(m_pendingLoad[i]||!m_savedPath[i].empty()) ReleaseForTags(i); Invalidate();return; }
             if(L.headphones.PtInRect(point)){
-                if(cfg_cueBackend.get()==GUID{}){m_pressedButton.SetRectEmpty();::ReleaseCapture();CueMenu(point);}
+                if(cfg_cueBackend.get()==GUID{}){m_pressedButton.SetRectEmpty();::ReleaseCapture();OpenSettings(2);}
                 else{StopPreview();m_cue[i]=!m_cue[i].load();ConfigureCue();}
                 Invalidate();return;
             }
@@ -1746,7 +1759,7 @@ namespace {
         CRect client;GetClientRect(&client);
         if(!m_trackingMouse) { TRACKMOUSEEVENT event={sizeof(event),TME_LEAVE,m_hWnd,0};::TrackMouseEvent(&event);m_trackingMouse=true; }
         auto hot=HitButton(point,client);
-        if(hot!=m_hotButton) { m_hotButton=hot;Invalidate(); }
+        if(hot!=m_hotButton) {auto old=m_hotButton;m_hotButton=hot;InvalidateButton(old);InvalidateButton(hot);}
 		if (m_drag == 0) return;
 		if (!(nFlags & MK_LBUTTON)) {   // le bouton a ete relache ailleurs
 			m_drag = 0;
@@ -1761,7 +1774,7 @@ namespace {
 	}
 
 	void CDjPanel::OnLButtonUp(UINT nFlags, CPoint point) {
-        if(!m_pressedButton.IsRectEmpty()) { m_pressedButton.SetRectEmpty();::ReleaseCapture();Invalidate(); }
+        if(!m_pressedButton.IsRectEmpty()) {auto old=m_pressedButton;m_pressedButton.SetRectEmpty();::ReleaseCapture();InvalidateButton(old);}
 		if (m_drag != 0) {
 			m_drag = 0;
 			::ReleaseCapture();
@@ -1969,6 +1982,7 @@ namespace {
     }
 
     void CDjPanel::LoadDeck(int deck,const char* path,t_uint32 subsong){
+        if(m_applyImport[deck]&&(m_importDeck[deck].item.path!=path||m_importDeck[deck].item.subsong!=subsong))m_applyImport[deck]=false;
         m_prepareSuspended[deck]=false;dj_queue::Item item{path,subsong};auto prepared=TakePreparation(deck,item);
         if(!TrimOptions().enabled()||prepared){m_pendingLoad[deck]=false;CommitLoadDeck(deck,path,subsong,prepared);return;}
         if(!m_autoChanging)CancelAutomation();
@@ -1989,12 +2003,14 @@ namespace {
         }
     }
     void CDjPanel::CommitLoadDeck(int deck,const char* path,t_uint32 subsong,std::shared_ptr<PreparedTrack> prepared) {
+        const auto imported=m_importDeck[deck];bool applyImport=m_applyImport[deck]&&imported.item.path==path&&imported.item.subsong==subsong;m_applyImport[deck]=false;
         if(!m_autoChanging)CancelAutomation();
         m_autoArmed[deck]=false;
         if(m_stemOwner==deck)CancelStems();
         m_stemReady[deck]=m_stemActive[deck]=false;m_stemMask[deck]=15;m_stemSolo[deck]=0;m_stemSolo[deck]=0;for(auto& v:m_stemVolume[deck])v=1;m_stemKey[deck].clear();
 		StopWaveThread(deck);   // l'ancienne analyse n'a plus d'interet
-		m_view[deck] = 0.0;     // on repart en vue complete
+		m_loopNotice[deck].clear();
+        m_view[deck] = 0.0;     // on repart en vue complete
         m_waveNeedsRebuild[deck]=false;
 
 		// Nom affiche : la partie apres le dernier "\" ou "/" de l'adresse
@@ -2076,7 +2092,9 @@ namespace {
 			std::shared_ptr<Waveform> wave = nd.wave;
 			{
 				std::lock_guard<std::mutex> lock(m_lock);
-				m_deck[deck] = std::move(nd);    // remplace l'ancien contenu (et l'arrete)
+				nd.loop=dj_loop::restore(m_loopLibrary,GridKey(path,subsong),nd.trimStart,nd.trimEnd>0?nd.trimEnd:nd.length);
+                if(applyImport)nd.loop=dj_session::bounded(imported.loop,nd.trimStart,nd.trimEnd>0?nd.trimEnd:nd.length);
+                m_deck[deck] = std::move(nd);    // remplace l'ancien contenu (et l'arrete)
 				m_error[deck].clear();
 			}
 
@@ -2090,7 +2108,8 @@ namespace {
 				const auto grid = dj_beats::manual(m_deck[deck].bpmValue,savedGrid->second.get<double>());
 				if (grid.valid) { m_manualGrid[deck] = true; m_manualPhase[deck] = grid.offset; }
 			}
-			if (!m_restoring) SaveSession();
+			if(applyImport){m_manualGrid[deck]=false;m_manualPhase[deck]=0;if(imported.manual){auto grid=dj_beats::manual(m_deck[deck].bpmValue,imported.phase);if(grid.valid){m_manualGrid[deck]=true;m_manualPhase[deck]=grid.offset;}}}
+            if (!m_restoring) SaveSession();
 
 			// Calcul de la forme d'onde en arriere-plan
 			m_waveCur[deck] = wave;
@@ -2131,6 +2150,7 @@ namespace {
 		return ok && MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
 	}
 
+
 	void CDjPanel::SaveSession() {
 		if (m_restoring) return;
 		picojson::array items;
@@ -2160,12 +2180,84 @@ namespace {
 		try {
 			if (!WriteSessionFile(text)) FB2K_console_formatter() << "foo_dj : session file could not be saved";
 			if (!WriteSessionFile(picojson::value(m_gridLibrary).serialize(),"foo_dj-grids.json")) FB2K_console_formatter() << "foo_dj : beat grids could not be saved";
+            if (!WriteSessionFile(picojson::value(m_loopLibrary).serialize(),"foo_dj-loops.json")) FB2K_console_formatter() << "foo_dj : A/B loop points could not be saved";
 		} catch (const std::exception & e) { FB2K_console_formatter() << "foo_dj : session save: " << e.what(); }
 	}
+    dj_session::Bundle CDjPanel::CaptureBundle(bool full){
+        if(full&&(m_pendingLoad[0]||m_pendingLoad[1]))throw std::runtime_error("Wait until deck loading completes / Attendez la fin du chargement");
+        dj_session::Bundle out;out.full=full;
+        for(int i=0;i<2;++i){out.lists[i].items=m_queue[i];out.lists[i].current=m_queueCurrent[i];}
+        if(!full)return out;
+        {std::lock_guard<std::mutex> lock(m_lock);for(int i=0;i<2;++i){auto& saved=out.decks[i];auto& deck=m_deck[i];saved.item={m_savedPath[i],m_savedSubsong[i]};saved.position=deck.framesPlayed/(m_outRate?m_outRate:48000);saved.loop=deck.loop;saved.loop.enabled=false;saved.speed=m_speed[i].load();saved.range=m_speedRange[i].load();saved.fixed=m_fixedPitch[i].load();saved.transpose=m_transpose[i].load();saved.volume=m_volume[i].load();saved.snap=m_loopSnap[i];saved.manual=m_manualGrid[i];saved.phase=m_manualPhase[i];}
+         out.crossfade=m_crossfade.load();out.fade=m_fadeSeconds;out.linear=m_linearFade.load();}
+        std::map<std::string,dj_queue::Item> referenced;for(auto& list:out.lists)for(auto& item:list.items)referenced[GridKey(item.path,item.subsong)]=item;for(auto& deck:out.decks)if(!deck.item.path.empty())referenced[GridKey(deck.item.path,deck.item.subsong)]=deck.item;
+        for(auto& pair:referenced){dj_session::Marker marker;marker.item=pair.second;marker.loop=dj_loop::restore(m_loopLibrary,pair.first,0,0);auto grid=m_gridLibrary.find(pair.first);if(grid!=m_gridLibrary.end()&&grid->second.is<double>()){marker.manual=true;marker.phase=grid->second.get<double>();}out.markers.push_back(marker);}return out;
+    }
+    void CDjPanel::ApplyBundle(const dj_session::Bundle& input,bool restoreDecks){
+        // Validate the complete document before touching any live state.
+        const auto bundle=dj_session::decode(dj_session::encode(input));
+        if(m_pendingLoad[0]||m_pendingLoad[1])throw std::runtime_error("Wait until deck loading completes / Attendez la fin du chargement");
+        bool full=restoreDecks&&bundle.full;
+        auto nextLoops=m_loopLibrary,nextGrids=m_gridLibrary;
+        if(full){
+            auto remember=[&](const dj_queue::Item& item,const dj_loop::Region& loop,bool manual,double phase){if(item.path.empty())return;auto key=GridKey(item.path,item.subsong);dj_loop::remember(nextLoops,key,loop);if(manual)nextGrids[key]=picojson::value(phase);else nextGrids.erase(key);};
+            for(auto& marker:bundle.markers)remember(marker.item,marker.loop,marker.manual,marker.phase);
+            for(auto& deck:bundle.decks)remember(deck.item,deck.loop,deck.manual,deck.phase);
+            if(picojson::value(nextLoops).serialize().size()>4*1024*1024||picojson::value(nextGrids).serialize().size()>4*1024*1024)throw std::runtime_error("Point/grid library limit exceeded; session unchanged / Bibliothèque de repères trop volumineuse ; session conservée");
+        }
+        CancelAutomation();m_chain[0]=m_chain[1]=false;StopPreview();
+        if(full){
+            ClearPreparations();CancelStems();for(int i=0;i<2;++i)StopWaveThread(i);
+            {std::lock_guard<std::mutex> lock(m_lock);m_autoFade={};for(int i=0;i<2;++i)m_deck[i]=Deck{};}
+            m_cue[0]=m_cue[1]=false;ConfigureCue();
+            for(int i=0;i<2;++i){m_applyImport[i]=false;m_pendingLoad[i]=m_pendingPlay[i]=false;m_pendingSeek[i]=-1;m_prepareSuspended[i]=false;m_savedPath[i].clear();m_savedSubsong[i]=0;m_name[i].clear();m_artist[i].clear();m_error[i].clear();m_loopNotice[i].clear();m_manualGrid[i]=false;m_manualPhase[i]=0;m_stemReady[i]=m_stemActive[i]=false;m_gridStamp[i]=0;}
+            m_loopLibrary.swap(nextLoops);m_gridLibrary.swap(nextGrids);
+        }
+        for(int i=0;i<2;++i){m_queue[i]=bundle.lists[i].items;m_queueCurrent[i]=full?dj_session::currentFor(bundle.lists[i],bundle.decks[i].item):dj_session::currentFor(bundle.lists[i],{m_savedPath[i],m_savedSubsong[i]});}
+        m_queueInfoAttempted.clear();m_forceQueueInfo=true;
+        if(full){
+            m_crossfade=(float)bundle.crossfade;m_fadeSeconds=bundle.fade;m_linearFade=bundle.linear;
+            m_restoring=true;try{
+                for(int i=0;i<2;++i){auto saved=bundle.decks[i];m_speed[i]=saved.speed;m_speedRange[i]=saved.range;m_transpose[i]=saved.transpose;m_fixedPitch[i]=saved.fixed;m_volume[i]=(float)saved.volume;m_loopSnap[i]=saved.snap;if(i)cfg_loopSnapB=saved.snap?1:0;else cfg_loopSnapA=saved.snap?1:0;
+                    if(saved.item.path.empty())continue;
+
+                    m_importDeck[i]=saved;m_applyImport[i]=true;m_savedPath[i]=saved.item.path;m_savedSubsong[i]=saved.item.subsong;
+                    LoadDeck(i,saved.item.path.c_str(),saved.item.subsong);SeekDeck(i,saved.position);
+                }
+            }catch(...){m_restoring=false;throw;}m_restoring=false;
+        }
+        UpdateQueue(0);UpdateQueue(1);SaveSession();Invalidate();
+    }
+    static bool BundleFileDialog(HWND owner,bool save,std::wstring& path,bool english){
+        std::vector<wchar_t> name(32768,0);if(save)wcscpy_s(name.data(),name.size(),L"DJ Decks.dj-decks.json");
+        OPENFILENAMEW dialog={sizeof(dialog)};dialog.hwndOwner=owner;dialog.lpstrFile=name.data();dialog.nMaxFile=(DWORD)name.size();dialog.lpstrFilter=L"DJ Decks (*.dj-decks.json;*.json)\0*.dj-decks.json;*.json\0All files\0*.*\0\0";dialog.lpstrDefExt=L"json";
+        dialog.lpstrTitle=save?(english?L"Save DJ Decks session":L"Enregistrer une session DJ Decks"):(english?L"Load DJ Decks session":L"Charger une session DJ Decks");
+        dialog.Flags=OFN_EXPLORER|OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|(save?OFN_OVERWRITEPROMPT:OFN_FILEMUSTEXIST);
+        bool result=save?GetSaveFileNameW(&dialog)!=FALSE:GetOpenFileNameW(&dialog)!=FALSE;if(result)path=name.data();else if(CommDlgExtendedError()!=0)throw std::runtime_error("Cannot open session file dialog");return result;
+    }
+    void CDjPanel::ExportBundle(bool full){
+        bool en=g_english.load();auto owner=::GetAncestor(m_hWnd,GA_ROOT);try{std::wstring path;if(!BundleFileDialog(owner,true,path,en))return;auto text=dj_session::serialize(CaptureBundle(full));if(!dj_session::write(path,text))throw std::runtime_error("Cannot save file; previous file retained / Enregistrement impossible ; ancien fichier conservé");}
+        catch(const std::exception& e){auto text=pfc::stringcvt::string_wide_from_utf8(e.what());::MessageBoxW(owner,text.get_ptr(),L"DJ Decks",MB_OK|MB_ICONERROR);}
+    }
+    void CDjPanel::ImportBundle(bool recovery){
+        bool en=g_english.load();auto owner=::GetAncestor(m_hWnd,GA_ROOT);try{
+            std::wstring path;if(recovery)path=SessionFile("foo_dj-before-import.json");else if(!BundleFileDialog(owner,false,path,en))return;
+            const auto bundle=dj_session::parse(dj_session::read(path));if(m_pendingLoad[0]||m_pendingLoad[1])throw std::runtime_error("Wait until deck loading completes / Attendez la fin du chargement");
+            bool restore=false;
+            if(bundle.full){auto answer=::MessageBoxW(owner,en?L"Both playlists will be replaced.\n\nAlso restore deck tracks, positions and mixer settings?\nYes: complete session, paused.\nNo: playlists only, deck playback retained.\nCancel: keep everything.":L"Les deux playlists seront remplacées.\n\nRestaurer aussi les morceaux, positions et réglages des platines ?\nOui : session complète, en pause.\nNon : playlists seules, lecture des platines conservée.\nAnnuler : ne rien changer.",L"DJ Decks",MB_YESNOCANCEL|MB_ICONQUESTION);if(answer==IDCANCEL)return;restore=answer==IDYES;}
+            else if(::MessageBoxW(owner,en?L"Replace both playlists? Deck playback will be retained.":L"Remplacer les deux playlists ? La lecture des platines sera conservée.",L"DJ Decks",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;
+            auto previous=dj_session::serialize(CaptureBundle(true));if(!dj_session::write(SessionFile("foo_dj-before-import.json"),previous))throw std::runtime_error("Cannot save recovery snapshot; import cancelled / Sauvegarde de sécurité impossible ; chargement annulé");
+            ApplyBundle(bundle,restore);
+            bool failed=false;if(restore)for(int i=0;i<2;++i)if(!bundle.decks[i].item.path.empty()&&!m_pendingLoad[i]){std::lock_guard<std::mutex> lock(m_lock);failed=failed||!m_deck[i].loaded;}
+            if(failed)::MessageBoxW(owner,en?L"Session loaded paused. Some files could not be opened; references are retained. Reconnect the source drive or check the paths, then reload the session.":L"Session chargée en pause. Certains fichiers sont indisponibles ; leurs références sont conservées. Reconnectez le disque ou vérifiez les chemins, puis rechargez la session.",L"DJ Decks",MB_OK|MB_ICONINFORMATION);
+        }catch(const std::exception& e){auto text=pfc::stringcvt::string_wide_from_utf8(e.what());::MessageBoxW(owner,text.get_ptr(),L"DJ Decks",MB_OK|MB_ICONERROR);}
+    }
 
 	LRESULT CDjPanel::OnRestoreSession(UINT, WPARAM, LPARAM, BOOL &) {
 		try {
-			picojson::value grids;
+			picojson::value loops;
+            if(picojson::parse(loops,ReadSessionFile("foo_dj-loops.json")).empty()&&loops.is<picojson::object>())m_loopLibrary=loops.get<picojson::object>();
+            picojson::value grids;
 			if (picojson::parse(grids,ReadSessionFile("foo_dj-grids.json")).empty() && grids.is<picojson::object>()) m_gridLibrary = grids.get<picojson::object>();
 		} catch (...) {}
 		std::string saved;
@@ -2671,9 +2763,10 @@ namespace {
         struct State{bool playing=false,ended=false,usable=false;double remaining=-1;};State state[2];dj_auto::Fade fade;
         {std::unique_lock<std::mutex> lock(m_lock,std::try_to_lock);if(!lock.owns_lock())return;
          fade=m_autoFade;
+         if(m_alternate&&(m_deck[0].loop.enabled||m_deck[1].loop.enabled))return;
          for(int i=0;i<2;++i){auto& d=m_deck[i];state[i].playing=d.playing;
              state[i].usable=d.loaded&&d.helper&&m_error[i].empty();
-             state[i].ended=state[i].usable&&d.eof&&!d.playing&&d.pendingFrames()==0;
+             state[i].ended=!d.loop.enabled&&state[i].usable&&d.eof&&!d.playing&&d.pendingFrames()==0;
              state[i].remaining=dj_auto::remaining(d.trimEnd>0?d.trimEnd:d.length,m_outRate?d.framesPlayed/m_outRate:0,m_speed[i].load());
          }}
         for(int i=0;i<2;++i)if(state[i].playing)m_autoArmed[i]=true;
@@ -2799,7 +2892,80 @@ namespace {
 		if (next[0] || next[1]) EnsureEngine();
 	}
 
-	// Saute a l'instant donne (en secondes) du fichier du deck, en lecture ou en pause.
+	bool CDjPanel::SnapLoopPoint(int deck,double position,double lower,double upper,double& target){
+        bool indicative=false;auto grid=dj_beats::displayed(m_grid[deck],m_cacheBpm[deck],m_manualGrid[deck],m_manualPhase[deck],indicative);
+        if(!grid.valid)return false;
+        CRect client;GetClientRect(&client);auto layout=MakeLayout(deck,client);double start=0,span=0;ViewWindow(deck,start,span);
+        if(span<=0||layout.wave.Width()<=2)return false;
+        auto ticks=dj_beats::ticks(grid,start,span,layout.wave.Width()-2);
+        return dj_loop::snap(grid.period,grid.offset,ticks.stride,position,lower,upper,target);
+    }
+
+    void CDjPanel::SaveLoopPoints(int deck,const dj_loop::Region& points){
+        if(m_savedPath[deck].empty())return;
+        try{
+            dj_loop::remember(m_loopLibrary,GridKey(m_savedPath[deck],m_savedSubsong[deck]),points);
+            auto text=picojson::value(m_loopLibrary).serialize();
+            if(text.size()>4*1024*1024||!WriteSessionFile(text,"foo_dj-loops.json"))throw std::runtime_error("A/B point save failed");
+        }catch(const std::exception&){m_loopNotice[deck]=g_english.load()?L"A/B points kept in memory; saving failed":L"Points A/B en mémoire ; échec de sauvegarde";}
+    }
+
+    void CDjPanel::SetLoopSnap(int deck,bool enabled){
+        std::unique_lock<std::mutex> lock(m_lock);auto& d=m_deck[deck];auto points=d.loop;bool changed=false;
+        auto fail=[&](const wchar_t* fr,const wchar_t* en){m_loopNotice[deck]=g_english.load()?en:fr;Invalidate();};
+        if(enabled&&points.a>=0){
+            if(m_pendingLoad[deck]){fail(L"Q : attendez la fin du chargement",L"Q: wait until loading finishes");return;}
+            double end=d.trimEnd>0?d.trimEnd:d.length;bool hasB=points.b>=0;
+            double a=points.a,b=points.b;
+            if(!SnapLoopPoint(deck,points.a,d.trimStart,end-(hasB?0.100000001:0.001),a)){
+                fail(L"Q : aucun repère disponible ; points conservés",L"Q: no usable grid line; points retained");return;
+            }
+            if(hasB&&!SnapLoopPoint(deck,points.b,a+0.100000001,end,b)){
+                // At the final visible line, use the preceding line for A if possible.
+                double earlier=a;
+                if(!SnapLoopPoint(deck,points.a,d.trimStart,a-0.100000001,earlier)||!SnapLoopPoint(deck,points.b,earlier+0.100000001,end,b)){
+                    fail(L"Q : impossible de caler les deux points ; points conservés",L"Q: cannot fit both points; points retained");return;
+                }a=earlier;
+            }
+            auto aligned=points;aligned.a=a;aligned.b=hasB?b:-1;
+            if(aligned.enabled&&d.helper&&!aligned.contains(d.framesPlayed/(m_outRate?m_outRate:48000))){
+                try{if(!d.stems&&!d.helper->can_seek())throw std::runtime_error("Cannot seek");abort_callback_dummy abort;dj_loop::restart(d,a,m_outRate?m_outRate:48000,abort);}
+                catch(const std::exception&){fail(L"Q : repositionnement impossible ; points conservés",L"Q: cannot reposition; points retained");return;}
+            }
+            d.loop=aligned;points=aligned;changed=true;
+        }
+        m_loopSnap[deck]=enabled;if(deck)cfg_loopSnapB=enabled?1:0;else cfg_loopSnapA=enabled?1:0;
+        m_loopNotice[deck].clear();lock.unlock();if(changed)SaveLoopPoints(deck,points);Invalidate();
+    }
+
+    void CDjPanel::EditLoop(int deck,int action){
+        std::unique_lock<std::mutex> lock(m_lock);auto& d=m_deck[deck];
+        auto fail=[&](const wchar_t* fr,const wchar_t* en){m_loopNotice[deck]=g_english.load()?en:fr;Invalidate();};
+        if(action==3){d.loop={};auto points=d.loop;m_loopNotice[deck].clear();lock.unlock();SaveLoopPoints(deck,points);Invalidate();return;}
+        if(!d.loaded||!d.helper||m_pendingLoad[deck]){fail(L"Chargez un morceau avant de poser la boucle",L"Load a track before setting a loop");return;}
+        if(!d.stems&&!d.helper->can_seek()){fail(L"Boucle : positionnement impossible",L"Loop: seeking unavailable");return;}
+        double now=d.framesPlayed/(m_outRate?m_outRate:48000);
+        if(action<2&&m_loopSnap[deck]){
+            double end=d.trimEnd>0?d.trimEnd:d.length;
+            double lower=action==0?d.trimStart:(std::max)(d.trimStart,d.loop.a+0.100000001),upper=action==0?end-0.001:end;
+            double snapped=now;
+            if((action==1&&d.loop.a<0)||!SnapLoopPoint(deck,now,lower,upper,snapped)){fail(L"Q : aucun repère disponible ici. Vérifiez BPM, grille et zoom.",L"Q: no usable grid line here. Check BPM, grid and zoom.");return;}
+            now=snapped;
+        }
+        if(action==0){if(d.loop.enabled){fail(L"Désactivez la boucle pour modifier A",L"Disable the loop before editing A");return;}d.loop.setA(now);}
+        if(action==1){if(d.loop.enabled){fail(L"Désactivez la boucle pour modifier B",L"Disable the loop before editing B");return;}if(!d.loop.setB(now)){fail(L"Placez B au moins 100 ms après A",L"Set B at least 100 ms after A");return;}}
+        if(action==2){
+            if(!d.loop.enabled){
+                if(!d.loop.valid()){fail(L"Posez A puis B pour activer la boucle",L"Set A then B before enabling the loop");return;}
+                if(m_autoFade.active||m_autoFade.finished){fail(L"Attendez la fin du fondu AUTO",L"Wait until the AUTO fade finishes");return;}
+                try{abort_callback_dummy abort;dj_loop::restart(d,d.loop.a,m_outRate?m_outRate:48000,abort);}catch(const std::exception&){fail(L"Impossible de revenir à A",L"Cannot seek to A");return;}
+            }
+            d.loop.enabled=!d.loop.enabled;
+        }
+        m_loopNotice[deck].clear();auto points=d.loop;lock.unlock();if(action<2)SaveLoopPoints(deck,points);Invalidate();
+    }
+
+    // Saute a l'instant donne (en secondes) du fichier du deck, en lecture ou en pause.
 	void CDjPanel::SeekDeck(int deck, double seconds) {
         if(m_pendingLoad[deck]){m_pendingSeek[deck]=seconds;return;}
 		std::lock_guard<std::mutex> lock(m_lock);
@@ -2821,6 +2987,7 @@ namespace {
 			d.pendingPos = 0;
 			d.eof = false; d.stretch.reset(); d.stretchFlushed = false;
 			d.framesPlayed = (uint64_t)(seconds * (double)(m_outRate?m_outRate:48000));
+            if(d.loop.enabled&&!d.loop.contains(seconds))d.loop.enabled=false;
 			m_error[deck].clear();
             // A seek changes source position, not the user's AUTO mode. During
             // a transition keep its direction and current gain, retiming only
@@ -2973,6 +3140,111 @@ namespace {
         abort.sleep(.3); // let the final buffered cue block drain before restoring deck cue
     }
 
+    void CDjPanel::RefreshTrimPreparations(){
+        ClearPreparations();for(int i=0;i<2;++i)if(m_pendingLoad[i]){if(TrimOptions().enabled())RequestPreparation(i,m_pendingItem[i]);else{auto item=m_pendingItem[i];bool play=m_pendingPlay[i];double seek=m_pendingSeek[i];m_pendingLoad[i]=m_pendingPlay[i]=false;m_pendingSeek[i]=-1;CommitLoadDeck(i,item.path.c_str(),item.subsong);if(seek>=0)SeekDeck(i,seek);if(play)TogglePlay(i);}}
+    }
+    void CDjPanel::SettingsCommand(int choice){
+        bool en=g_english.load();
+            if(choice==221){m_pressedButton.SetRectEmpty();::ReleaseCapture();auto detected=dj_scrobble::probe();::MessageBoxW(m_hWnd,detected.message(en).c_str(),L"DJ Decks - foo_scrobble",MB_OK|MB_ICONINFORMATION);}
+            if(choice==306){m_queueInfoAttempted.clear();m_forceQueueInfo=true;for(int i=0;i<2;++i)UpdateQueue(i,m_queueWindow[i].list?m_queueWindow[i].selected():std::vector<size_t>{});}
+            if(choice>=300&&choice<=305){m_pressedButton.SetRectEmpty();::ReleaseCapture();QueueFormatMenu((int)choice);}
+
+            if(choice>=210&&choice<=212){g_replaygain=(int)choice-210;cfg_replaygain=(int)choice-210;}
+            if(choice==220){
+                bool enable=!g_scrobble.load();
+                if(enable&&!dj_scrobble::service().is_valid()){m_pressedButton.SetRectEmpty();::ReleaseCapture();auto detected=dj_scrobble::probe();::MessageBoxW(m_hWnd,detected.message(en).c_str(),L"DJ Decks - foo_scrobble",MB_OK|MB_ICONINFORMATION);}
+                else{g_scrobble=enable;cfg_scrobble=enable;g_scrobbleReady=false;{std::lock_guard<std::mutex> lock(m_lock);for(auto& d:m_deck)d.listening.discardUnsubmitted();}m_lastScrobbleTick=0;ScrobbleTick();}
+            }
+
+            if(choice==200){m_pressedButton.SetRectEmpty();::ReleaseCapture();std::set<std::wstring> keys;{std::lock_guard<std::mutex> lock(m_lock);for(int i=0;i<2;++i)if(m_deck[i].stems)keys.insert(dj_stems::wide(m_stemKey[i]));}if(m_stemJob)keys.insert(dj_stems::wide(m_stemJob->sourceKey));dj_stems::manageCache(m_settings.m_hWnd?m_settings.m_hWnd:m_hWnd,en,keys);for(int i=0;i<2;++i)CheckStems(i);}
+            if(choice==1 || choice==2){g_english=choice==2;cfg_language=choice==2;}
+            if(choice==10||choice==11){dj_skin::flat=choice==11;cfg_flat=choice==11;}
+            if(choice>=100&&choice<108){dj_skin::colorIndex[0]=(int)choice-100;cfg_colorA=(int)choice-100;}
+            if(choice>=120&&choice<128){dj_skin::colorIndex[1]=(int)choice-120;cfg_colorB=(int)choice-120;}
+            for(auto& window:m_queueWindow)if(window.m_hWnd)::RedrawWindow(window.m_hWnd,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
+
+        m_settings.english=g_english.load();m_settings.accent=DeckAccent(0);
+        m_pressedButton.SetRectEmpty();::ReleaseCapture();Invalidate();
+    }
+    void CDjPanel::RefreshSettingsDevices(){
+        m_settingsDevices.clear();m_settingsDeviceError.clear();
+        try{auto core=output_manager::get()->getCoreConfig();output_manager_v2::get()->listDevices([&](const char* name,const GUID& backend,const GUID& device){
+            if(backend==core.m_output&&device==core.m_device)return;
+            m_settingsDevices.push_back({pfc::stringcvt::string_wide_from_utf8(name).get_ptr(),backend,device});
+        });}catch(const std::exception& e){m_settingsDeviceError=pfc::stringcvt::string_wide_from_utf8(e.what()).get_ptr();}
+    }
+    void CDjPanel::OpenSettings(int page){
+        if(!m_settings.m_hWnd)RefreshSettingsDevices();
+        m_settings.values=[this](int tab){return SettingsValues(tab);};
+        m_settings.changed=[this](int id,int value){SettingsChanged(id,value);};
+        m_settings.open(m_hWnd,g_english.load(),DeckAccent(0),page);
+    }
+    std::vector<dj_settings::Item> CDjPanel::SettingsValues(int page){
+        using namespace dj_settings;std::vector<Item> out;bool en=g_english.load();
+        auto text=[&](const wchar_t* fr,const wchar_t* english){return std::wstring(en?english:fr);};
+        auto combo=[&](int id,std::wstring label,std::vector<std::wstring> choices,int value){out.push_back({id,label,Kind::combo,choices,value,true});};
+        auto toggle=[&](int id,std::wstring label,bool value,bool enabled=true){out.push_back({id,label,Kind::toggle,{},value?1:0,enabled});};
+        auto action=[&](int id,std::wstring label){out.push_back({id,label,Kind::action,{},0,true});};
+        auto note=[&](std::wstring label){out.push_back({0,label,Kind::note,{},0,true});};
+        if(page==0){
+            combo(1000,text(L"Langue",L"Language"),{L"Français",L"English"},en?1:0);
+            combo(1010,text(L"Thème",L"Theme"),{text(L"Brillant",L"Glossy"),text(L"Plat / sobre",L"Flat / subdued")},dj_skin::flat.load()?1:0);
+            std::vector<std::wstring> colors={L"Cyan",L"Orange",text(L"Bleu",L"Blue"),text(L"Violet",L"Purple"),text(L"Vert",L"Green"),text(L"Rose / rouge",L"Rose / red"),text(L"Or",L"Gold"),text(L"Gris",L"Grey")};
+            combo(1100,text(L"Couleur de la platine A",L"Deck A color"),colors,dj_skin::colorIndex[0].load());combo(1120,text(L"Couleur de la platine B",L"Deck B color"),colors,dj_skin::colorIndex[1].load());
+            note(text(L"Les couleurs et le thème s’appliquent aux platines et à leurs playlists. Les infobulles suivent la langue choisie.",L"Decks and playlists share colors/theme. Tooltips follow the selected language."));
+        }else if(page==1){
+            combo(1210,L"ReplayGain",{text(L"Désactivé",L"Off"),text(L"Piste : gain + crête",L"Track: gain + peak"),text(L"Album : gain + crête",L"Album: gain + peak")},g_replaygain.load());
+            toggle(220,text(L"Scrobbler les platines audibles via foo_scrobble",L"Scrobble audible decks via foo_scrobble"),g_scrobble.load());action(221,text(L"Diagnostic foo_scrobble…",L"foo_scrobble diagnostic…"));
+            note(text(L"Le scrobbling nécessite foo_scrobble 1.6.x configuré. ReplayGain ne modifie pas les tags. La sortie du mix principal reste celle configurée dans foobar.",L"Scrobbling requires configured foo_scrobble 1.6.x. ReplayGain does not edit tags. Master output follows foobar's output configuration."));
+        }else if(page==2){
+            std::vector<std::wstring> devices={text(L"Aucune sortie sélectionnée",L"No output selected")};int selected=0;
+            for(size_t n=0;n<m_settingsDevices.size();++n){auto& d=m_settingsDevices[n];devices.push_back(d.name);if(d.backend==cfg_cueBackend.get()&&d.device==cfg_cueDevice.get())selected=(int)n+1;}
+            if(cfg_cueBackend.get()!=GUID{}&&!selected){devices.push_back(text(L"Sortie mémorisée indisponible / mix principal",L"Saved output unavailable / master"));selected=(int)devices.size()-1;}
+            combo(1400,text(L"Sortie casque",L"Headphone output"),devices,selected);action(1401,text(L"Actualiser les sorties disponibles",L"Refresh available outputs"));
+            std::vector<std::wstring> volume;for(int n=0;n<=100;++n)volume.push_back(std::to_wstring(n)+L" %");combo(1402,text(L"Volume casque",L"Headphone volume"),volume,std::clamp((int)cfg_cueVolume.get(),0,100));
+            std::vector<std::wstring> previews;for(int n=0;n<5;++n)previews.push_back(dj_preview::name(n,en));combo(1403,text(L"Extraits de playlist",L"Playlist excerpts"),previews,std::clamp((int)cfg_previewMode.get(),0,4));
+            toggle(1404,L"Cue A",m_cue[0].load(),cfg_cueBackend.get()!=GUID{});toggle(1405,L"Cue B",m_cue[1].load(),cfg_cueBackend.get()!=GUID{});
+            action(1406,text(L"Arrêter l’extrait de playlist",L"Stop playlist excerpt"));action(1407,text(L"Désactiver Cue A/B et libérer la sortie",L"Disable Cue A/B and release output"));action(1408,text(L"Réessayer la sortie mémorisée",L"Retry saved output"));
+            auto error=m_cueOutput.lastError();if(!error.empty())note(pfc::stringcvt::string_wide_from_utf8(error.c_str()).get_ptr());if(!m_settingsDeviceError.empty())note(m_settingsDeviceError);
+            note(text(L"Cue A/B suit la lecture de chaque deck. Les extraits des playlists sont indépendants. Le mix principal est exclu des sorties proposées. Bluetooth : latence possible.",L"Cue A/B follows deck transport; playlist excerpts are independent. Master output is excluded. Bluetooth latency is possible."));
+        }else if(page==3){
+            std::vector<std::wstring> formats={text(L"Artiste - Titre (durée)",L"Artist - Title (duration)"),text(L"Titre - Artiste (durée)",L"Title - Artist (duration)"),text(L"Album | N° de piste. Artiste - Titre (durée)",L"Album | Track no. Artist - Title (duration)"),text(L"Artiste - Titre",L"Artist - Title"),text(L"Personnalisé…",L"Custom…")};
+            int selected=4;for(int n=0;n<4;++n)if(std::string(cfg_queueFormat.get().get_ptr())==dj_queue_format::presets[n])selected=n;combo(1300,text(L"Format d’affichage",L"Display format"),formats,selected);
+            action(304,text(L"Modifier le format personnalisé…",L"Edit custom format…"));toggle(305,text(L"Afficher les numéros de position",L"Show playlist position numbers"),cfg_queueNumbers.get()!=0);action(306,text(L"Relire les métadonnées des deux playlists",L"Reload both playlists' metadata"));
+            note(pfc::stringcvt::string_wide_from_utf8(cfg_queueFormat.get().get_ptr()).get_ptr());
+            action(1600,text(L"Enregistrer les deux playlists dans un fichier…",L"Save both playlists to a file…"));action(1601,text(L"Enregistrer une session complète (playlists + platines)…",L"Save a complete session (playlists + decks)…"));action(1602,text(L"Charger une sauvegarde…",L"Load a saved session…"));action(1603,text(L"Revenir à la session avant le dernier chargement…",L"Restore the session before the last import…"));
+            note(text(L"Fichiers JSON : aucun morceau audio n’est copié. La session complète conserve positions, points A/B, grilles manuelles, vitesse, tonalité et mixage. Au chargement : lecture, boucles et AUTO désactivés.",L"JSON files reference audio without copying it. Complete sessions include positions, A/B points, manual grids, speed, pitch and mixer settings. Full loads restore paused, with loops and AUTO off."));
+        }else if(page==4){
+            std::vector<std::wstring> duration;int selected=0;const int seconds[]={0,1,2,3,5,8,10,15,20,30};for(int n=0;n<10;++n){duration.push_back(std::to_wstring(seconds[n])+L" s");if(m_fadeSeconds==seconds[n])selected=n;}
+            if(m_fadeSeconds!=seconds[selected]){duration.push_back(std::to_wstring(m_fadeSeconds)+L" s");selected=10;}
+            combo(1500,text(L"Durée du fondu A/B",L"A/B fade duration"),duration,selected);combo(1501,text(L"Courbe du crossfader",L"Crossfader curve"),{text(L"Puissance constante",L"Equal power"),text(L"Linéaire",L"Linear")},m_linearFade.load()?1:0);
+            toggle(1502,text(L"Q : caler les points A/B de la platine A",L"Q: snap A/B points on deck A"),m_loopSnap[0]);toggle(1503,text(L"Q : caler les points A/B de la platine B",L"Q: snap A/B points on deck B"),m_loopSnap[1]);
+            toggle(1510,text(L"Supprimer le silence au début",L"Trim leading silence"),cfg_trimHead.get()!=0);toggle(1511,text(L"Supprimer le silence à la fin",L"Trim trailing silence"),cfg_trimTail.get()!=0);
+            const int levels[]={-96,-90,-80,-70,-60,-50,-40,-30};std::vector<std::wstring> thresholds;selected=-1;for(int n=0;n<8;++n){thresholds.push_back(std::to_wstring(levels[n])+L" dBFS");if(cfg_trimDb.get()==levels[n])selected=n;}
+            if(selected<0){thresholds.push_back(std::to_wstring(cfg_trimDb.get())+L" dBFS");selected=8;}combo(1512,text(L"Seuil de silence",L"Silence threshold"),thresholds,selected);
+            note(text(L"Silences : appliqués aux prochains chargements, avec préchargement du suivant en AUTO. Activer Q recale aussi les points existants sur la grille affichée. Choisir le mode AUTO sur chaque deck.",L"Silence options apply to new loads; AUTO preloads the next track. Enabling Q also snaps existing points to the displayed grid. Select AUTO modes on each deck."));
+        }else if(page==5){action(200,text(L"Taille et nettoyage du cache des stems…",L"Stem cache size and cleanup…"));note(text(L"Les stems restent expérimentaux. Le gestionnaire affiche la taille et permet de vider les entrées inutilisées en conservant celles qui sont actives ou en préparation. Les morceaux source sont préservés.",L"Stems remain experimental. The cache manager shows size and removes unused entries while retaining active/preparing stems. Source music is preserved."));note(text(L"Moteur local facultatif : accélération NVIDIA CUDA automatique, sinon CPU. Préparation, volumes et solos restent accessibles sur chaque deck.",L"Optional local engine: automatic NVIDIA CUDA acceleration with CPU fallback. Preparation, volume and solo controls remain on each deck."));}
+        return out;
+    }
+    void CDjPanel::SettingsChanged(int id,int value){
+        if(id==1600||id==1601)ExportBundle(id==1601);else if(id==1602||id==1603)ImportBundle(id==1603);
+        else if(id==1000)SettingsCommand(1+value);else if(id==1010)SettingsCommand(10+value);else if(id==1100)SettingsCommand(100+value);else if(id==1120)SettingsCommand(120+value);else if(id==1210)SettingsCommand(210+value);else if(id==1300)SettingsCommand(value==4?304:300+value);
+        else if(id==220){if((value!=0)!=g_scrobble.load())SettingsCommand(220);}else if(id==305){if((value!=0)!=(cfg_queueNumbers.get()!=0))SettingsCommand(305);}
+        else if(id==200||id==221||id==304||id==306)SettingsCommand(id);
+        else if(id==1400){
+            if(value==0){StopPreview();m_cue[0]=m_cue[1]=false;cfg_cueBackend=GUID{};cfg_cueDevice=GUID{};ConfigureCue();}
+            else if(value>0&&(size_t)value<=m_settingsDevices.size()){auto d=m_settingsDevices[value-1];auto core=output_manager::get()->getCoreConfig();if(d.backend==core.m_output&&d.device==core.m_device){RefreshSettingsDevices();return;}StopPreview();cfg_cueBackend=d.backend;cfg_cueDevice=d.device;ConfigureCue();}
+        }else if(id==1401)RefreshSettingsDevices();else if(id==1402){cfg_cueVolume=std::clamp(value,0,100);m_cueVolume=cfg_cueVolume.get()/100.;}
+        else if(id==1403)cfg_previewMode=std::clamp(value,0,4);
+        else if(id==1404||id==1405){if(cfg_cueBackend.get()!=GUID{}){StopPreview();m_cue[id-1404]=value!=0;ConfigureCue();}}
+        else if(id==1406)StopPreview();else if(id==1407){StopPreview();m_cue[0]=m_cue[1]=false;ConfigureCue();}else if(id==1408){StopPreview();ConfigureCue();}
+        else if(id==1500){const int seconds[]={0,1,2,3,5,8,10,15,20,30};if(value>=0&&value<10){m_fadeSeconds=seconds[value];SaveSession();}}
+        else if(id==1501){m_linearFade=value==1;SaveSession();}
+        else if(id==1502||id==1503)SetLoopSnap(id-1502,value!=0);
+        else if(id==1510||id==1511||id==1512){if(id==1510)cfg_trimHead=value?1:0;if(id==1511)cfg_trimTail=value?1:0;if(id==1512){const int levels[]={-96,-90,-80,-70,-60,-50,-40,-30};if(value>=0&&value<8)cfg_trimDb=levels[value];}RefreshTrimPreparations();}
+        m_settings.english=g_english.load();m_settings.accent=DeckAccent(0);Invalidate();
+    }
+
     void CDjPanel::SilenceMenu(CPoint point){
         bool en=g_english.load();auto options=TrimOptions();HMENU menu=CreatePopupMenu(),thresholds=CreatePopupMenu();
         AppendMenuW(menu,MF_STRING|(options.head?MF_CHECKED:0),1,en?L"Skip leading silence":L"Supprimer le silence au début");
@@ -2982,7 +3254,7 @@ namespace {
         AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|MF_GRAYED,0,en?L"Applies to newly loaded tracks · next AUTO track preloaded":L"Prochains chargements · préchargement du suivant en AUTO");
         ClientToScreen(&point);auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,point.x,point.y,0,m_hWnd,nullptr);DestroyMenu(menu);
         if(!choice)return;if(choice==1)cfg_trimHead=!options.head;if(choice==2)cfg_trimTail=!options.tail;if(choice>=100&&choice<108)cfg_trimDb=values[choice-100];
-        ClearPreparations();for(int i=0;i<2;++i)if(m_pendingLoad[i]){if(TrimOptions().enabled())RequestPreparation(i,m_pendingItem[i]);else{auto item=m_pendingItem[i];bool play=m_pendingPlay[i];double seek=m_pendingSeek[i];m_pendingLoad[i]=m_pendingPlay[i]=false;m_pendingSeek[i]=-1;CommitLoadDeck(i,item.path.c_str(),item.subsong);if(seek>=0)SeekDeck(i,seek);if(play)TogglePlay(i);}}
+        RefreshTrimPreparations();
     }
 
     void CDjPanel::CueMenu(CPoint point){
@@ -3088,10 +3360,11 @@ namespace {
 						Deck & d = m_deck[i];
 						if (!d.playing) continue;
 						try {
-							FillDeck(d, kBlockFrames, outRate, abort, speeds[i], fixedPitch[i], m_transpose[i].load());
+							dj_loop::wrap(d,outRate,abort);
+                            FillDeck(d, kBlockFrames, outRate, abort, speeds[i], fixedPitch[i], m_transpose[i].load());
 						} catch (const std::exception & e) {
 							pfc::stringcvt::string_wide_from_utf8 message(e.what());
-							d.playing = false;
+							d.playing = false; d.loop.enabled=false;
 							d.eof = true;
 							m_error[i] = std::wstring(L"Erreur : ") + message.get_ptr();
 						}
@@ -3107,7 +3380,10 @@ namespace {
 						}
 					}
 
-					// The fade clock follows produced audio, so output stalls and pause cannot run it ahead.
+					// Split the common output block at either loop boundary so the other deck keeps its clock.
+                    for(int i=0;i<2;++i)if(m_deck[i].playing)frames=m_deck[i].loop.cap(m_deck[i].framesPlayed/outRate,speeds[i],outRate,frames);
+
+                    // The fade clock follows produced audio, so output stalls and pause cannot run it ahead.
                     if(m_autoFade.active && frames>0 && m_deck[m_autoFade.to].playing) {
                         m_crossfade=(float)m_autoFade.advance(frames,true);
                     }
@@ -3120,7 +3396,7 @@ namespace {
 						for (int i = 0; i < 2; ++i) {
 							Deck & d = m_deck[i];
 							if (d.playing && d.pendingFrames() > 0) {
-                                size_t f=(std::min)(kBlockFrames,d.pendingFrames());
+                                size_t f=(std::min)(frames,d.pendingFrames());
                                 if(d.trimEnd>0&&d.trimEnd<d.length)f=dj_silence::cap(d.trimEnd,d.framesPlayed/outRate,speeds[i],outRate,f);
 								for (size_t n = 0; n < f; ++n) {
 									const audio_sample g = (audio_sample)(prevGain[i] + (targetGain[i] - prevGain[i]) * (double)(n + 1) / (double)f);
@@ -3131,7 +3407,7 @@ namespace {
 								d.framesPlayed += f * speeds[i];
                                 bool audibleStem=!d.stems; if(d.stems)for(int k=0;k<4;++k)audibleStem=audibleStem||d.stems->target(k)>0;
                                 d.listening.consume(f,outRate,audibleStem?targetGain[i]:0.,g_scrobble.load()&&g_scrobbleReady.load()&&m_scrobbleAllowed[i].load(),(long long)std::time(nullptr));
-                                if(d.trimEnd>0&&d.trimEnd<d.length&&d.framesPlayed/outRate>=d.trimEnd){d.eof=true;d.playing=false;d.pending.clear();d.pendingPos=0;d.src.clear();d.stretch.reset();}
+                                if(!d.loop.enabled&&d.trimEnd>0&&d.trimEnd<d.length&&d.framesPlayed/outRate>=d.trimEnd){d.eof=true;d.playing=false;d.pending.clear();d.pendingPos=0;d.src.clear();d.stretch.reset();}
 							}
 						}
 					}
@@ -3140,7 +3416,7 @@ namespace {
                     // 4. Menage : decks arrives au bout, tampons vides
 					for (int i = 0; i < 2; ++i) {
 						Deck & d = m_deck[i];
-						if (d.playing && d.eof && d.pendingFrames() == 0) d.playing = false;
+						if (d.playing && !d.loop.enabled && d.eof && d.pendingFrames() == 0) d.playing = false;
 						if (d.pendingPos == d.pending.size()) { d.pending.clear(); d.pendingPos = 0; }
 						else if (d.pendingPos >= 32768) { d.pending.erase(d.pending.begin(), d.pending.begin() + d.pendingPos); d.pendingPos = 0; }
 					}

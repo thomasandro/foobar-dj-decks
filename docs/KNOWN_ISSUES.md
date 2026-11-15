@@ -1,9 +1,14 @@
 # Known issues and scope
 
-## Beta status — 0.34.1-beta.1 x64 / x86
+## A/B loops and Q
+
+Points persist per track/subsong; enabling Q aligns them to displayed grid lines at the current zoom. Dotted grids have indicative phase. This is not continuous beat tracking, and decoder seeks/processing resets can produce loop-edge clicks/artifacts. AUTO waits while looping; see [AB_LOOPS.md](AB_LOOPS.md).
+
+
+## Beta status — 0.37.0-beta.1 x64 / x86
 
 - User-confirmed: x64 installation, playback on real tracks, save/restore.
-  The newly packaged beta was also installed with backup and confirmed working by the user.
+  The installed x64 0.37.0 beta and session-file workflow were confirmed working by the user.
 - Slow starts/closes predate this component work according to the user; no
   component-specific cause has been demonstrated, so this is not a beta blocker.
 - Both architectures compile and pass native tests. External x86 host feedback is still requested.
@@ -11,6 +16,11 @@
   from GPU/decoder errors depend on the machine and source material.
 - Additional profiles/devices, narrow panels/DPI, output reconfiguration and the
   foo_scrobble service adapter still benefit from wider beta testing.
+
+## Session files
+
+- Session files reference audio paths; no media/stems are embedded or relocated. Full restore is paused, loops/AUTO/Cue off; stems return to original audio.
+- Current silence settings bound restored positions/points. Only a one-level pre-import recovery snapshot is kept. Review private paths before sharing. See [SESSION_FILES.md](SESSION_FILES.md).
 
 ## Audio and synchronization
 

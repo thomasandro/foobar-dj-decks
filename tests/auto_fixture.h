@@ -1,10 +1,11 @@
+#include "../sdk/foobar2000/foo_dj/ab_loop.h"
 #include "../../sdk/foobar2000/foo_dj/auto_mix.h"
 #include "../../sdk/foobar2000/foo_dj/deck_queue.h"
 #include <atomic>
 #include <mutex>
 #include <cassert>
 #include <iostream>
-struct AutoDeck {bool loaded=true,helper=true,playing=false,eof=false;double length=100,trimEnd=0,framesPlayed=0;size_t pending=0;size_t pendingFrames(){return pending;}};
+struct AutoDeck {dj_loop::Region loop;bool loaded=true,helper=true,playing=false,eof=false;double length=100,trimEnd=0,framesPlayed=0;size_t pending=0;size_t pendingFrames(){return pending;}};
 class CDjPanel {
 public:
     bool m_restoring=false,m_autoChanging=false,m_alternate=false,m_chain[2]={},m_autoArmed[2]={},m_altAvailable[2]={true,true};
