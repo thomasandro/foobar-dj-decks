@@ -47,6 +47,7 @@ struct CDjPanel {
  void SettingsCommand(int id){commands.push_back(id);if(id==1||id==2)g_english=id==2;if(id==10||id==11)dj_skin::flat=id==11;if(id>=100&&id<108)dj_skin::colorIndex[0]=id-100;if(id>=120&&id<128)dj_skin::colorIndex[1]=id-120;if(id>=210&&id<213)g_replaygain=id-210;if(id>=300&&id<304)cfg_queueFormat.value.value=dj_queue_format::presets[id-300];if(id==305)cfg_queueNumbers=cfg_queueNumbers.get()?0:1;if(id==220)g_scrobble=!g_scrobble.load();}
  std::vector<dj_settings::Item> SettingsValues(int);
  void SettingsChanged(int,int);
+ int distributed=0;void DistributeActivePlaylist(){++distributed;}
  int exported=-1,imported=-1;void ExportBundle(bool full){exported=full?1:0;}void ImportBundle(bool recovery){imported=recovery?1:0;}
  void SetLoopSnap(int deck,bool enabled){m_loopSnap[deck]=enabled;if(deck)cfg_loopSnapB=enabled?1:0;else cfg_loopSnapA=enabled?1:0;}
 };

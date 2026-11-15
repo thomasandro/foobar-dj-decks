@@ -624,6 +624,7 @@ namespace {
 		void SaveSession();
         dj_session::Bundle CaptureBundle(bool full);
         void ApplyBundle(const dj_session::Bundle& bundle,bool restoreDecks);
+        void DistributeActivePlaylist();
         void ExportBundle(bool full);void ImportBundle(bool recovery=false);
         bool m_applyImport[2]={};dj_session::Deck m_importDeck[2];
         std::unique_ptr<dj_stems::Job> m_stemJob;
@@ -2235,6 +2236,29 @@ namespace {
         dialog.Flags=OFN_EXPLORER|OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|(save?OFN_OVERWRITEPROMPT:OFN_FILEMUSTEXIST);
         bool result=save?GetSaveFileNameW(&dialog)!=FALSE:GetOpenFileNameW(&dialog)!=FALSE;if(result)path=name.data();else if(CommDlgExtendedError()!=0)throw std::runtime_error("Cannot open session file dialog");return result;
     }
+    void CDjPanel::DistributeActivePlaylist(){
+        bool en=g_english.load();auto owner=m_settings.m_hWnd?m_settings.m_hWnd:m_hWnd;
+        try{
+            if(m_pendingLoad[0]||m_pendingLoad[1])throw std::runtime_error("Wait until deck loading completes / Attendez la fin du chargement");
+            auto manager=playlist_manager::get();auto active=manager->get_active_playlist();
+            if(active==pfc_infinite)throw std::runtime_error("No active foobar playlist / Aucune playlist foobar active");
+            metadb_handle_list handles;manager->playlist_get_all_items(active,handles);
+            if(handles.get_count()==0)throw std::runtime_error("The active playlist is empty / La playlist active est vide");
+            if(handles.get_count()>20000)throw std::runtime_error("At most 20000 tracks / Maximum 20000 pistes");
+            std::vector<dj_queue::Item> source;source.reserve(handles.get_count());
+            for(t_size n=0;n<handles.get_count();++n)source.push_back({handles[n]->get_path(),handles[n]->get_subsong_index()});
+            dj_session::Bundle bundle;
+            if(!dj_queue::alternate(source,bundle.lists[0].items,bundle.lists[1].items))throw std::runtime_error("Invalid playlist entries / Entrées de playlist invalides");
+            bundle=dj_session::decode(dj_session::encode(bundle)); // Validate storage limits before confirmation/mutation.
+            pfc::string8 name;manager->playlist_get_name(active,name);
+            std::wstring message=(en?L"Distribute active playlist: ":L"Répartir la playlist active : ");message+=pfc::stringcvt::string_wide_from_utf8(name).get_ptr();
+            message+=L"\n\nA : "+std::to_wstring(bundle.lists[0].items.size())+L"   /   B : "+std::to_wstring(bundle.lists[1].items.size());
+            message+=en?L"\n\nReplace both deck playlists? Tracks 1, 3, 5… go to A; 2, 4, 6… to B. Loaded deck playback is retained. AUTO and previews stop. A recovery snapshot will be saved. The foobar playlist is unchanged.":L"\n\nRemplacer les deux playlists des platines ? Pistes 1, 3, 5… sur A ; 2, 4, 6… sur B. La lecture chargée est conservée. AUTO et préécoute s’arrêtent. Une sauvegarde de récupération sera créée. La playlist foobar reste inchangée.";
+            if(::MessageBoxW(owner,message.c_str(),L"DJ Decks",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;
+            if(!dj_session::write(SessionFile("foo_dj-before-import.json"),dj_session::serialize(CaptureBundle(true))))throw std::runtime_error("Cannot save recovery snapshot; distribution cancelled / Sauvegarde de sécurité impossible ; répartition annulée");
+            ApplyBundle(bundle,false);
+        }catch(const std::exception& e){auto message=pfc::stringcvt::string_wide_from_utf8(e.what());::MessageBoxW(owner,message.get_ptr(),L"DJ Decks",MB_OK|MB_ICONERROR);}
+    }
     void CDjPanel::ExportBundle(bool full){
         bool en=g_english.load();auto owner=::GetAncestor(m_hWnd,GA_ROOT);try{std::wstring path;if(!BundleFileDialog(owner,true,path,en))return;auto text=dj_session::serialize(CaptureBundle(full));if(!dj_session::write(path,text))throw std::runtime_error("Cannot save file; previous file retained / Enregistrement impossible ; ancien fichier conservé");}
         catch(const std::exception& e){auto text=pfc::stringcvt::string_wide_from_utf8(e.what());::MessageBoxW(owner,text.get_ptr(),L"DJ Decks",MB_OK|MB_ICONERROR);}
@@ -3212,7 +3236,8 @@ namespace {
             int selected=4;for(int n=0;n<4;++n)if(std::string(cfg_queueFormat.get().get_ptr())==dj_queue_format::presets[n])selected=n;combo(1300,text(L"Format d’affichage",L"Display format"),formats,selected);
             action(304,text(L"Modifier le format personnalisé…",L"Edit custom format…"));toggle(305,text(L"Afficher les numéros de position",L"Show playlist position numbers"),cfg_queueNumbers.get()!=0);action(306,text(L"Relire les métadonnées des deux playlists",L"Reload both playlists' metadata"));
             note(pfc::stringcvt::string_wide_from_utf8(cfg_queueFormat.get().get_ptr()).get_ptr());
-            action(1600,text(L"Enregistrer les deux playlists dans un fichier…",L"Save both playlists to a file…"));action(1601,text(L"Enregistrer une session complète (playlists + platines)…",L"Save a complete session (playlists + decks)…"));action(1602,text(L"Charger une sauvegarde…",L"Load a saved session…"));action(1603,text(L"Revenir à la session avant le dernier chargement…",L"Restore the session before the last import…"));
+            action(1604,text(L"Répartir la playlist active de foobar : A / B…",L"Distribute active foobar playlist: A / B…"));
+            action(1600,text(L"Enregistrer les deux playlists dans un fichier…",L"Save both playlists to a file…"));action(1601,text(L"Enregistrer une session complète (playlists + platines)…",L"Save a complete session (playlists + decks)…"));action(1602,text(L"Charger une sauvegarde…",L"Load a saved session…"));action(1603,text(L"Revenir avant le dernier chargement ou répartition…",L"Restore before the last import or distribution…"));
             note(text(L"Fichiers JSON : aucun morceau audio n’est copié. La session complète conserve positions, points A/B, grilles manuelles, vitesse, tonalité et mixage. Au chargement : lecture, boucles et AUTO désactivés.",L"JSON files reference audio without copying it. Complete sessions include positions, A/B points, manual grids, speed, pitch and mixer settings. Full loads restore paused, with loops and AUTO off."));
         }else if(page==4){
             std::vector<std::wstring> duration;int selected=0;const int seconds[]={0,1,2,3,5,8,10,15,20,30};for(int n=0;n<10;++n){duration.push_back(std::to_wstring(seconds[n])+L" s");if(m_fadeSeconds==seconds[n])selected=n;}
@@ -3227,7 +3252,7 @@ namespace {
         return out;
     }
     void CDjPanel::SettingsChanged(int id,int value){
-        if(id==1600||id==1601)ExportBundle(id==1601);else if(id==1602||id==1603)ImportBundle(id==1603);
+        if(id==1604)DistributeActivePlaylist();else if(id==1600||id==1601)ExportBundle(id==1601);else if(id==1602||id==1603)ImportBundle(id==1603);
         else if(id==1000)SettingsCommand(1+value);else if(id==1010)SettingsCommand(10+value);else if(id==1100)SettingsCommand(100+value);else if(id==1120)SettingsCommand(120+value);else if(id==1210)SettingsCommand(210+value);else if(id==1300)SettingsCommand(value==4?304:300+value);
         else if(id==220){if((value!=0)!=g_scrobble.load())SettingsCommand(220);}else if(id==305){if((value!=0)!=(cfg_queueNumbers.get()!=0))SettingsCommand(305);}
         else if(id==200||id==221||id==304||id==306)SettingsCommand(id);

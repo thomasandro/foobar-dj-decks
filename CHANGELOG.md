@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.38.1-beta.1 — 2026-11-15 (x64 / x86)
+
+Public beta with both architectures, installable packages, complete matching sources and SHA-256 checksums. Includes the previously unpublished 0.38.0 changes below. The user confirmed active-playlist distribution and Ctrl+A in x64. Both native suites are checked for release; x86 real-host feedback remains welcome. New user-supplied screenshot in both READMEs.
+
+- Ctrl+A selects every track in the focused floating deck playlist, independently for A and B. Handles empty lists and suppresses the translated control character beep.
+
+
+## 0.38.0-beta.1 — previously unpublished development milestone
+
+- Settings → Playlists: distribute the entire active foobar playlist alternately to A (1,3,5…) and B (2,4,6…), preserving order, duplicates and subsongs.
+- Shows source playlist name and per-deck counts before replacing both lists. Does not modify the source playlist, loaded tracks, playback position or mixer; disables AUTO/previews using the existing playlists-only import path.
+- Validates list/storage limits before changes and creates a recovery snapshot; aborts if the backup fails. Restore through Settings → Playlists → Restore before the last import or distribution.
+- Empty/absent/oversized playlists and pending deck loads leave existing state unchanged. No automatic track loading or playback start.
+
+
 ## 0.37.0-beta.1 — 2026-11-15 (x64 / x86)
 
 Public beta with both architectures, installable packages, matching complete sources and SHA-256 checksums. Includes every previously unpublished milestone from 0.35.0 through 0.37.0, detailed below: independent/persistent A/B loops, Q alignment of existing points, six-tab settings, tooltip/contrast corrections and session-file save/load/recovery.

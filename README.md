@@ -3,30 +3,32 @@
 [Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
-**0.37.0-beta.1: x64 and x86 beta packages. Stems remain experimental.**
+**0.38.1-beta.1: x64 and x86 beta packages. Stems remain experimental.**
 
 Also available: [stem cache](docs/STEM_CACHE.md), [ReplayGain and optional scrobbling](docs/SCROBBLING_REPLAYGAIN.md), [custom playlist formats and A/B transfers](docs/PLAYLISTS.md).
 
 New in this beta: [persistent A/B loops and Q grid snapping](docs/AB_LOOPS.md), [six-tab settings window](docs/SETTINGS.md), more responsive tooltips and corrected dark-label contrast, and [save/load session files](docs/SESSION_FILES.md).
 
+New since 0.37: **distribute the active foobar playlist alternately to A and B**, with a recovery snapshot before replacement, and **Ctrl+A** to select every track in either deck playlist. See [playlist workflow](docs/PLAYLISTS.md).
+
 ## ⬇ Download the component
 
-**[Download DJ Decks 0.37.0-beta.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-win-x64.fb2k-component)**
+**[Download DJ Decks 0.38.1-beta.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.38.1-beta.1/foo_dj-0.38.1-beta.1-win-x64.fb2k-component)**
 
-**[Download the 32-bit (x86) component](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-win-x86.fb2k-component)**
+**[Download the 32-bit (x86) component](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.38.1-beta.1/foo_dj-0.38.1-beta.1-win-x86.fb2k-component)**
 
-[Complete matching sources (x64 and x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-source.zip)
+[Complete matching sources (x64 and x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.38.1-beta.1/foo_dj-0.38.1-beta.1-source.zip)
 
 Installable `.fb2k-component` package: choose x64 or x86 to match foobar2000 2.x.
 In foobar2000: **Preferences → Components → Install…**, then restart.
 
-[Download the beta and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.37.0-beta.1)
+[Download the beta and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.38.1-beta.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
 
-![DJ Decks with stems, customized deck colors and floating playlist](docs/images/dj-decks-stems-0.24.png)
+![DJ Decks with stems, customized deck colors and floating playlist](docs/images/dj-decks-0.38.1.png)
 
-*User-supplied screenshot of the 0.24 development interface: stems, per-deck colors and integrated playlist header.*
+*User-supplied screenshot: 0.38.1 with deck playlists, headphone preview and A/B loops.*
 
 Thanks to [StyxCrosser](https://hydrogenaudio.org/index.php/topic,130167.msg1090621.html#msg1090621)
 for suggesting playlist popups and for the UI/file-release feedback.
@@ -65,7 +67,7 @@ for suggesting playlist popups and for the UI/file-release feedback.
 ## Optional stems engine — experimental
 
 The component works without Python. For stems, install Python 3.10–3.12, download
-the [optional engine installer ZIP](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-stems-engine-0.37.0-beta.1.zip), extract it and run
+the [optional engine installer ZIP](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.38.1-beta.1/foo_dj-stems-engine-0.38.1-beta.1.zip), extract it and run
 `./install-stems.ps1 -DownloadModel` in PowerShell. It downloads the dependencies
 and htdemucs model separately. NVIDIA CUDA is selected when available; otherwise CPU.
 Use `-CPUOnly` for a CPU-only installation. Existing CPU users must rerun the
@@ -79,7 +81,7 @@ foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions ha
 not been validated. Choose the package matching your foobar architecture (x64 or x86). Both architectures compile and pass native regression tests; real-host x86 feedback remains welcome. No ARM64, macOS or native Columns UI build is supplied.
 
 Prefer an isolated portable profile for the first test. Install
-`foo_dj-0.37.0-beta.1-win-x64.fb2k-component` with
+`foo_dj-0.38.1-beta.1-win-x64.fb2k-component` with
 **Preferences → Components → Install…**, then restart. In Default UI layout editing
 mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
 This component does not require WebView2, Spider Monkey Panel or Smooth Browser.

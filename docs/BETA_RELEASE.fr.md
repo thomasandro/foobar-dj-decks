@@ -1,9 +1,9 @@
-# DJ Decks 0.37.0-beta.1 — bêta x64 et x86
+# DJ Decks 0.38.1-beta.1 — bêta x64 et x86
 
-Nouveautés depuis 0.34.1-beta.1 : boucles A/B indépendantes et points sauvegardés par morceau/sous-piste ; bouton Q pour caler les nouveaux points et recaler les points existants ; fenêtre de réglages à six onglets ; infobulles allégées et correction du dessin/contraste des cases ; fichiers JSON pour enregistrer/charger les deux playlists et l’état des platines, avec récupération avant chargement.
+Nouveautés depuis 0.37 : répartition alternée de la playlist active de foobar vers les playlists A/B (1/3/5… sur A ; 2/4/6… sur B), confirmation et récupération avant remplacement ; Ctrl+A dans chaque playlist ; nouvelle capture fournie par l’utilisateur.
 
-Choisir le paquet correspondant à foobar : [x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-win-x64.fb2k-component) ou [x86](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-win-x86.fb2k-component). [Sources communes complètes](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.37.0-beta.1/foo_dj-0.37.0-beta.1-source.zip).
+Les morceaux chargés continuent à jouer ; AUTO et préécoutes des playlists sont arrêtés. Aucun départ automatique. Les doublons et sous-pistes sont conservés et la playlist foobar n’est pas modifiée.
 
-L’utilisateur confirme le fonctionnement x64 et les fichiers de session. Les deux architectures sont compilées et leurs tests natifs passent ; le retour en conditions réelles x86 reste attendu. Les stems restent expérimentaux. La restauration complète revient en pause, boucles/AUTO/Cue coupés. Aucun audio/stem n’est embarqué : les morceaux doivent rester accessibles aux mêmes chemins. Ne pas partager un JSON sans vérifier ses chemins privés.
+Le fonctionnement x64 est confirmé par l’utilisateur. Compilation et suites natives vérifiées sur les deux architectures ; les retours en conditions réelles x86 sont bienvenus. Stems toujours expérimentaux, préparés hors temps réel. Moteur Python/PyTorch facultatif : Windows 64 bits nécessaire, même avec foobar x86.
 
-Voir [boucles/Q](AB_LOOPS.md), [réglages](SETTINGS.md), [fichiers de session](SESSION_FILES.md) et [changelog détaillé](../CHANGELOG.md), y compris les versions intermédiaires non publiées.
+Voir [guide de répartition](PLAYLIST_DISTRIBUTION.fr.md), [changelog détaillé](../CHANGELOG.md) et [release GitHub](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.38.1-beta.1).

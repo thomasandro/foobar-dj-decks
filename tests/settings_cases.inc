@@ -15,7 +15,7 @@ int main(){
  panel.SettingsChanged(1400,0);assert(cfg_cueBackend.get()==GUID{}&&!panel.m_cue[0]);
  panel.SettingsChanged(1500,6);assert(panel.m_fadeSeconds==10);panel.SettingsChanged(1501,1);assert(panel.m_linearFade);panel.SettingsChanged(1502,1);assert(panel.m_loopSnap[0]&&cfg_loopSnapA.get()==1);panel.SettingsChanged(1503,1);assert(panel.m_loopSnap[1]&&cfg_loopSnapB.get()==1);
  panel.SettingsChanged(1510,1);panel.SettingsChanged(1511,1);panel.SettingsChanged(1512,3);assert(cfg_trimHead.get()==1&&cfg_trimTail.get()==1&&cfg_trimDb.get()==-70&&panel.trimmed==3);
- panel.SettingsChanged(1600,0);assert(panel.exported==0);panel.SettingsChanged(1601,0);assert(panel.exported==1);panel.SettingsChanged(1602,0);assert(panel.imported==0);panel.SettingsChanged(1603,0);assert(panel.imported==1);
+ panel.SettingsChanged(1604,0);assert(panel.distributed==1);panel.SettingsChanged(1600,0);assert(panel.exported==0);panel.SettingsChanged(1601,0);assert(panel.exported==1);panel.SettingsChanged(1602,0);assert(panel.imported==0);panel.SettingsChanged(1603,0);assert(panel.imported==1);
  // Merely rendering/opening the settings must not reset custom stored values.
  panel.m_fadeSeconds=7.5;cfg_trimDb=-77;cfg_queueFormat.value.value="custom";auto rows=panel.SettingsValues(4);assert(panel.m_fadeSeconds==7.5&&cfg_trimDb.get()==-77);rows=panel.SettingsValues(3);assert(rows[0].value==4&&cfg_queueFormat.get().value=="custom");
  CWindow owner;CRect rect(0,0,900,700);owner.Create(L"STATIC",nullptr,rect,L"Hidden owner",WS_OVERLAPPEDWINDOW);

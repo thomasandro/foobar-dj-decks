@@ -3,6 +3,15 @@
 #include <iostream>
 using namespace dj_queue;
 int main(){
+    for(size_t count: {size_t(1),size_t(2),size_t(7),size_t(20000)}){
+        std::vector<Item> source;for(size_t n=0;n<count;++n)source.push_back({n%3==0?"duplicate":"file://école.flac",unsigned(n%11)});
+        auto saved=encode(source).serialize();std::vector<Item> a,b;assert(alternate(source,a,b));
+        assert(a.size()==(count+1)/2&&b.size()==count/2);
+        for(size_t n=0;n<count;++n){auto& item=(n%2?b:a)[n/2];assert(item.path==source[n].path&&item.subsong==source[n].subsong);}
+        assert(encode(source).serialize()==saved);
+    }
+    std::vector<Item> a={{"keepA",1}},b={{"keepB",2}};
+    for(auto source:std::vector<std::vector<Item>>{{},{{"",0}},std::vector<Item>(20001,{"x",0})}){assert(!alternate(source,a,b));assert(a[0].path=="keepA"&&b[0].path=="keepB");}
     std::vector<Item> q={{"file://école.flac",2},{"b",0},{"b",0},{"d",7},{"e",0}};
     auto restored=decode(encode(q));assert(restored.size()==5&&restored[0].path==q[0].path&&restored[0].subsong==2);
     assert(decode(encode({})).empty());

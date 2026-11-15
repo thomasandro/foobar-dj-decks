@@ -100,3 +100,9 @@ pas les tags. En l'absence de métadonnées en cache, le nom de fichier reste le
 Les fenêtres utilisent les contrôles
 Windows redessinés : fond sombre, bord cyan/orange, boutons noirs brillants et
 sélection teintée comme les decks. Le titre et la croix sont intégrés au bandeau brillant : glisser le bandeau pour déplacer la fenêtre, tirer les bords pour la redimensionner. La croix masque la fenêtre sans vider la liste. Le défilement reste Windows.
+
+## Active foobar playlist distribution (0.38.1)
+
+Settings → Playlists → Distribute active foobar playlist alternates the entire playlist into A (1,3,5…) and B (2,4,6…). Confirmation precedes replacement of both lists; a recovery snapshot is required. Source playlist, duplicates and subsongs are preserved. Loaded decks keep playing, but AUTO and previews stop. Nothing starts automatically. Restore via Settings → Playlists → Restore before the last import or distribution (one shared recovery snapshot).
+
+Ctrl+A selects every row of the focused floating deck playlist. Use Shift-drag to move selected entries to the other deck; plain drag copies them.

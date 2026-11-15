@@ -43,6 +43,13 @@ int main(){
     a.refresh({L"Title — artist",L"école",L"duplicate",L"duplicate"},{1,2});b.refresh({L"Other deck"});
     assert(a.list!=b.list);assert(SendMessage(a.list,LB_GETCOUNT,0,0)==4);
     assert((a.selected()==std::vector<size_t>{1,2}));
+    // Exercise the real Ctrl+A handler, separately for each hidden playlist.
+    BYTE originalKeys[256],keys[256]={};assert(GetKeyboardState(originalKeys));keys[VK_CONTROL]=0x80;assert(SetKeyboardState(keys));
+    SendMessage(a.list,WM_KEYDOWN,'A',0);SendMessage(a.list,WM_CHAR,1,0);
+    assert((a.selected()==std::vector<size_t>{0,1,2,3})&&b.selected().empty());
+    SendMessage(b.list,WM_KEYDOWN,'A',0);assert((b.selected()==std::vector<size_t>{0}));
+    b.refresh({});SendMessage(b.list,WM_KEYDOWN,'A',0);assert(b.selected().empty());
+    assert(SetKeyboardState(originalKeys));a.refresh({L"Title — artist",L"école",L"duplicate",L"duplicate"},{1,2});b.refresh({L"Other deck"});
     // Exercise the actual owner-draw handlers on an offscreen bitmap, not a capture.
     HDC dc=CreateCompatibleDC(nullptr);HBITMAP bitmap=CreateBitmap(320,80,1,32,nullptr);auto prior=SelectObject(dc,bitmap);
     DRAWITEMSTRUCT draw={};draw.CtlType=ODT_LISTBOX;draw.itemID=0;draw.hwndItem=a.list;draw.hDC=dc;draw.rcItem={0,0,300,28};draw.itemState=ODS_SELECTED;

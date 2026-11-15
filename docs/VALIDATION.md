@@ -1,3 +1,9 @@
+# Release validation — 0.38.1-beta.1
+
+The user confirmed active playlist distribution and Ctrl+A in x64. Both architectures are compiled and checked with native suites for release; external real-host x86 feedback remains welcome. New regression cases cover alternating empty/odd/even/20,000-item lists, limits, duplicates/subsongs, unchanged inputs and actual Ctrl+A handling on two independent hidden playlist windows. No live foobar host, capture or monitoring is used.
+
+Previous release validation follows for context.
+
 # Release validation — 0.37.0-beta.1
 
 The user confirmed x64 installation and the new session-file workflow working. Both architectures compile and pass native release regression suites. These tests cover the audio processing cases, queue/drop/persistence models, actual controller methods with mock services/readers, hidden settings/tooltip/control windows, parent-routed contrast drawing, loop bounds/Q, atomic file IO, malformed imports, recovery prerequisites and asynchronous preparation. No live x86 host installation/loading is claimed; external feedback remains welcome.

@@ -10,6 +10,13 @@ struct Item { std::string path; unsigned subsong=0; };
 inline bool valid(const Item& i) {
     return !i.path.empty() && i.path.size()<=32768 && i.path.find_first_of("\r\n") == std::string::npos && i.path.find('\0')==std::string::npos;
 }
+// Preserve source order, duplicates and subsongs. Never silently truncate.
+inline bool alternate(const std::vector<Item>& source,std::vector<Item>& a,std::vector<Item>& b){
+    if(source.empty()||source.size()>20000)return false;
+    std::vector<Item> next[2];
+    for(size_t n=0;n<source.size();++n){if(!valid(source[n]))return false;next[n%2].push_back(source[n]);}
+    a.swap(next[0]);b.swap(next[1]);return true;
+}
 inline picojson::value encode(const std::vector<Item>& items) {
     picojson::array out;
     for(auto& i:items) { picojson::object o; o["path"]=picojson::value(i.path);o["subsong"]=picojson::value(double(i.subsong));out.emplace_back(o); }

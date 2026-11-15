@@ -198,6 +198,10 @@ private:
         }
         if(msg==WM_CAPTURECHANGED||msg==WM_CANCELMODE||(msg==WM_KEYDOWN&&w==VK_ESCAPE))self->previewPressed=-1;
         if((msg==WM_KEYDOWN&&w==VK_ESCAPE)||msg==WM_CANCELMODE){self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();if(::GetCapture()==h)::ReleaseCapture();return 0;}
+        if(msg==WM_KEYDOWN && w=='A' && (::GetKeyState(VK_CONTROL)&0x8000) && !(::GetKeyState(VK_MENU)&0x8000)){
+            ::SendMessage(h,LB_SETSEL,TRUE,-1);::InvalidateRect(h,nullptr,FALSE);return 0;
+        }
+        if(msg==WM_CHAR && w==1)return 0; // Ctrl+A: consume the translated character, without a beep.
         if(msg==WM_KEYDOWN && w==VK_DELETE){if(self->action)self->action(1,self->selected(),0);return 0;}
         if(msg==WM_KEYDOWN && w==VK_RETURN){if(self->action)self->action(0,self->selected(),0);return 0;}
         if(msg==WM_LBUTTONDOWN){

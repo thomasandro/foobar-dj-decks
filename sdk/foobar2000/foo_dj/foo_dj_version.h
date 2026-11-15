@@ -15,7 +15,7 @@
 //   0.6.2  defilement de la forme d'onde plus fluide
 //   0.7    chargement des morceaux par glisser-deposer (plus de bouton Charger)
 
-#define FOO_DJ_VERSION "0.37.0-beta.1"
+#define FOO_DJ_VERSION "0.38.1-beta.1"
 
 // Meme texte en "grands caracteres" (L"..."), pour l'affichage dans le panneau.
 #define FOO_DJ_WIDE_(x) L##x
