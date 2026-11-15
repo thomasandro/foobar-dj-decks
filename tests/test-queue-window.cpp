@@ -63,10 +63,20 @@ int main(){
     RECT row;SendMessage(a.list,LB_GETITEMRECT,1,(LPARAM)&row);int y=(row.top+row.bottom)/2;
     SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(10,y));
     SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(10,y+50));
-    SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(10,y+50));assert(called==4&&selection.size()==2);
+    SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(10,y+50));
+    // Hidden windows cannot be hit by WindowFromPoint; exercise the same drop
+    // dispatcher with an explicit destination, without showing/capturing a host.
+    assert(a.finishDrag(a.list,{10,y+50},{1,2},false));assert(called==4&&selection.size()==2);
+    bool moved=false;size_t boundary=999;DjQueueWindow* source=nullptr;
+    b.received=[&](DjQueueWindow* from,const std::vector<size_t>& s,size_t before,bool move){source=from;selection=s;boundary=before;moved=move;return true;};
+    assert(a.finishDrag(b.list,{10,0},{1,2},false));assert(source==&a&&selection.size()==2&&!moved&&boundary==0);
+    assert(a.finishDrag(b.list,{10,1000},{1,2},true));assert(moved&&boundary==1);
+    assert(!a.finishDrag(nullptr,{0,0},{1,2},false));
+    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(10,y));SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(10,y+50));
+    called=-1;SendMessage(a.list,WM_KEYDOWN,VK_ESCAPE,0);SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(10,y+50));assert(called==-1);called=4;
     SendMessage(a.m_hWnd,WM_COMMAND,MAKEWPARAM(105,BN_CLICKED),(LPARAM)GetDlgItem(a.m_hWnd,105));
     assert(a.IsWindow()&&!a.IsWindowVisible()&&SendMessage(a.list,LB_GETCOUNT,0,0)==4&&called==4);
     SendMessage(a.m_hWnd,WM_CLOSE,0,0);assert(a.IsWindow()&&!a.IsWindowVisible());
-    a.DestroyWindow();b.DestroyWindow();assert(!a.list&&!b.list);
+    auto oldList=a.list;a.DestroyWindow();b.DestroyWindow();assert(!a.list&&!b.list&&DjQueueWindow::containing(oldList)==nullptr);
     _Module.Term();OleUninitialize();std::cout<<"Hidden queue windows: independent lists, commands, drag selection and clean teardown passed\n";
 }

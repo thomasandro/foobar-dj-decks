@@ -1,5 +1,7 @@
 #pragma once
 #include <functional>
+#include <vector>
+#include <algorithm>
 #include <commctrl.h>
 #include "dj_skin.h"
 
@@ -10,6 +12,14 @@ public:
     std::function<bool(IDataObject*)> accepts;
     std::function<void(IDataObject*,size_t)> dropped;
     std::function<void(int,std::vector<size_t>,size_t)> action;
+    std::function<bool(DjQueueWindow*,const std::vector<size_t>&,size_t,bool)> received;
+    static inline std::vector<DjQueueWindow*> windows;
+    static DjQueueWindow* containing(HWND target){for(auto w:windows)if(w->list==target)return w;return nullptr;}
+    bool finishDrag(HWND target,POINT local,const std::vector<size_t>& selection,bool moving){
+        auto destination=containing(target);if(!destination)return false;
+        if(destination==this){if(action)action(4,selection,boundary(local));return bool(action);}
+        return destination->received&&destination->received(this,selection,destination->boundary(local),moving);
+    }
     HWND list=nullptr;
     bool english=false;
     int deckIndex=0;
@@ -38,7 +48,7 @@ public:
         const wchar_t* eng[]={L"Load",L"Remove",L"Move up",L"Move down"};
         for(int n=0;n<4;++n)::SetWindowTextW(buttons[n],en?eng[n]:fr[n]);
         ::SetWindowTextW(buttons[4],en?L"Close playlist":L"Fermer la playlist");
-        ::SetWindowTextW(help,en?L"Drop tracks here. Double-click: load. Delete: remove. Drag: reorder.":L"Deposer ici. Double-clic : charger. Suppr : retirer. Glisser : reordonner.");
+        ::SetWindowTextW(help,en?L"Drag A/B: copy. Shift: move. Double-click: load. Delete: remove.":L"Glisser A/B : copier. Maj : déplacer. Double-clic : charger. Suppr : retirer.");
         ShowWindow(SW_SHOWNORMAL);SetForegroundWindow(m_hWnd);::SetFocus(list);
     }
     BEGIN_MSG_MAP_EX(DjQueueWindow)
@@ -164,6 +174,7 @@ private:
     }
     static LRESULT CALLBACK ListProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data) {
         auto self=(DjQueueWindow*)data;
+        if((msg==WM_KEYDOWN&&w==VK_ESCAPE)||msg==WM_CANCELMODE){self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();if(::GetCapture()==h)::ReleaseCapture();return 0;}
         if(msg==WM_KEYDOWN && w==VK_DELETE){if(self->action)self->action(1,self->selected(),0);return 0;}
         if(msg==WM_KEYDOWN && w==VK_RETURN){if(self->action)self->action(0,self->selected(),0);return 0;}
         if(msg==WM_LBUTTONDOWN){
@@ -178,13 +189,16 @@ private:
         if(msg==WM_MOUSEMOVE && (w&MK_LBUTTON) && !self->dragSelection.empty()) {
             int x=GET_X_LPARAM(l),y=GET_Y_LPARAM(l);
             if(abs(x-self->start.x)>GetSystemMetrics(SM_CXDRAG)||abs(y-self->start.y)>GetSystemMetrics(SM_CYDRAG))self->dragging=true;
-            if(self->dragging){::SetCursor(::LoadCursor(nullptr,IDC_SIZEALL));RECT r;::GetClientRect(h,&r);auto top=::SendMessage(h,LB_GETTOPINDEX,0,0);
-                if(y<0&&top>0)::SendMessage(h,LB_SETTOPINDEX,top-1,0);
-                if(y>r.bottom)::SendMessage(h,LB_SETTOPINDEX,top+1,0);return 0;}
+            if(self->dragging){POINT screen={x,y};::ClientToScreen(h,&screen);auto target=containing(::WindowFromPoint(screen));
+                ::SetCursor(::LoadCursor(nullptr,target?(target==self?IDC_SIZEALL:IDC_HAND):IDC_NO));
+                if(target){POINT q=screen;::ScreenToClient(target->list,&q);RECT r;::GetClientRect(target->list,&r);auto top=::SendMessage(target->list,LB_GETTOPINDEX,0,0);
+                    if(q.y<14&&top>0)::SendMessage(target->list,LB_SETTOPINDEX,top-1,0);
+                    if(q.y>r.bottom-14)::SendMessage(target->list,LB_SETTOPINDEX,top+1,0);}return 0;}
         }
         if(msg==WM_LBUTTONUP && self->dragging){
-            POINT p={GET_X_LPARAM(l),GET_Y_LPARAM(l)};auto sel=self->dragSelection;self->dragging=false;self->dragSelection.clear();
-            DefSubclassProc(h,msg,w,l);if(::GetCapture()==h)::ReleaseCapture();if(self->action)self->action(4,sel,self->boundary(p));return 0;
+            POINT screen={GET_X_LPARAM(l),GET_Y_LPARAM(l)};::ClientToScreen(h,&screen);HWND target=::WindowFromPoint(screen);POINT local=screen;if(target)::ScreenToClient(target,&local);
+            auto sel=self->dragSelection;self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();
+            DefSubclassProc(h,msg,w,l);if(::GetCapture()==h)::ReleaseCapture();self->finishDrag(target,local,sel,(w&MK_SHIFT)!=0);return 0;
         }
         if(msg==WM_LBUTTONUP && self->preserveSelection){
             self->preserveSelection=false;::ReleaseCapture();DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
@@ -205,6 +219,7 @@ private:
         help=::CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,0,0,0,0,m_hWnd,nullptr,nullptr,nullptr);
         for(auto h:{list,help,buttons[0],buttons[1],buttons[2],buttons[3]})::SendMessage(h,WM_SETFONT,(WPARAM)font,FALSE);
         target=new Target(this);if(FAILED(::RegisterDragDrop(list,target))){target->Release();target=nullptr;}
+        windows.push_back(this);
         return 0;
     }
     void OnSize(UINT,CSize size){
@@ -217,7 +232,7 @@ private:
     }
     void OnClose(){ShowWindow(SW_HIDE);}
     void OnMinMax(MINMAXINFO* info){info->ptMinTrackSize.x=480;info->ptMinTrackSize.y=240;}
-    void OnDestroy(){if(target){::RevokeDragDrop(list);target->window=nullptr;target->Release();target=nullptr;}::RemoveWindowSubclass(list,ListProc,1);for(auto h:buttons)::RemoveWindowSubclass(h,ButtonProc,1);list=nullptr;if(font){::DeleteObject(font);font=nullptr;}if(darkBrush){::DeleteObject(darkBrush);darkBrush=nullptr;}}
+    void OnDestroy(){windows.erase(std::remove(windows.begin(),windows.end(),this),windows.end());if(target){::RevokeDragDrop(list);target->window=nullptr;target->Release();target=nullptr;}::RemoveWindowSubclass(list,ListProc,1);for(auto h:buttons)::RemoveWindowSubclass(h,ButtonProc,1);list=nullptr;if(font){::DeleteObject(font);font=nullptr;}if(darkBrush){::DeleteObject(darkBrush);darkBrush=nullptr;}}
     LRESULT OnCommand(UINT,WPARAM w,LPARAM,BOOL&) {
         if(LOWORD(w)==100 && HIWORD(w)==LBN_DBLCLK){if(action)action(0,selected(),0);}
         else if(LOWORD(w)>=101&&LOWORD(w)<=104){if(action)action(LOWORD(w)-101,selected(),0);}

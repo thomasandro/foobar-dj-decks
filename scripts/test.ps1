@@ -26,6 +26,26 @@ $layoutLast = $source.IndexOf('// Colonne du curseur', $layoutFirst)
 if ($layoutFirst -lt 0 -or $layoutLast -lt $layoutFirst) { throw 'Skin layout extraction anchors changed.' }
 $layout = 'static constexpr int kFaderHeight=52, kFooterHeight=0;' + "`n" + $source.Substring($layoutFirst,$layoutLast-$layoutFirst)
 [IO.File]::WriteAllText((Join-Path $output 'skin-layout.inc'),$layout,[Text.UTF8Encoding]::new($false))
+$rgSource = [IO.File]::ReadAllText((Join-Path $repo 'sdk/foobar2000/SDK/replaygain.cpp'))
+$rgFirst = $rgSource.IndexOf('audio_sample t_replaygain_config::query_scale(const replaygain_info & info) const {')
+$rgLast = $rgSource.IndexOf('audio_sample t_replaygain_config::query_scale(const metadb_handle_ptr', $rgFirst)
+if ($rgFirst -lt 0 -or $rgLast -lt $rgFirst) { throw 'ReplayGain extraction anchors changed.' }
+$rg = '#include "../../tests/replaygain_fixture.h"' + "`n" + $rgSource.Substring($rgFirst,$rgLast-$rgFirst) + "`n" + '#include "../../tests/replaygain_cases.inc"'
+[IO.File]::WriteAllText((Join-Path $output 'replaygain-generated.cpp'),$rg,[Text.UTF8Encoding]::new($false))
+$scFirst=$source.IndexOf('void ScrobbleTick(){')
+$scLast=$source.IndexOf('        void StemsTick();',$scFirst)
+if($scFirst -lt 0 -or $scLast -lt $scFirst){throw 'Scrobble extraction anchors changed'}
+$sc=$source.Substring($scFirst,$scLast-$scFirst).Replace('void ScrobbleTick(){','void CDjPanel::ScrobbleTick(){')
+[IO.File]::WriteAllText((Join-Path $output 'scrobble-generated.cpp'),'#include "../../tests/scrobble_fixture.h"'+"`n"+$sc+"`n"+'#include "../../tests/scrobble_cases.inc"',[Text.UTF8Encoding]::new($false))
+$metadataFirst=$source.IndexOf('void EnsureQueueInfo(){')
+$metadataLast=$source.IndexOf('        int m_queueCurrent[2]',$metadataFirst)
+if($metadataFirst -lt 0 -or $metadataLast -lt $metadataFirst){throw 'Metadata extraction anchors changed'}
+$metadata=$source.Substring($metadataFirst,$metadataLast-$metadataFirst).Replace('void EnsureQueueInfo(){','void CDjPanel::EnsureQueueInfo(){')
+[IO.File]::WriteAllText((Join-Path $output 'queue-metadata-generated.cpp'),'#include "../../tests/queue_metadata_fixture.h"'+"`n"+$metadata+"`n"+'#include "../../tests/queue_metadata_cases.inc"',[Text.UTF8Encoding]::new($false))
+$labelFirst=$source.IndexOf('std::wstring CDjPanel::QueueLabel(')
+$labelLast=$source.IndexOf('    void CDjPanel::UpdateQueue(', $labelFirst)
+if($labelFirst -lt 0 -or $labelLast -lt $labelFirst){throw 'Queue label extraction anchors changed'}
+[IO.File]::WriteAllText((Join-Path $output 'queue-label-generated.cpp'),'#include "../../tests/queue_label_fixture.h"'+"`n"+$source.Substring($labelFirst,$labelLast-$labelFirst)+"`n"+'#include "../../tests/queue_label_cases.inc"',[Text.UTF8Encoding]::new($false))
 $prior = $env:DJ_DECKS_VCVARS
 try {
     $env:DJ_DECKS_VCVARS = $vcvars

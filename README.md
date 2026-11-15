@@ -3,16 +3,18 @@
 [Français](README.fr.md) · [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Hydrogenaudio discussion](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Two independent DJ-style decks inside foobar2000, with a mixer and waveforms.
-**0.24.0-alpha.1 is an experimental alpha release.**
+**0.28.0-beta.1 is the first x64 beta. Stems remain experimental.**
+
+New features: [stem cache](docs/STEM_CACHE.md), [ReplayGain and optional scrobbling](docs/SCROBBLING_REPLAYGAIN.md), [custom playlist formats and A/B transfers](docs/PLAYLISTS.md).
 
 ## ⬇ Download the component
 
-**[Download DJ Decks 0.24.0-alpha.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-0.24.0-alpha.1-win-x64.fb2k-component)**
+**[Download DJ Decks 0.28.0-beta.1 for Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-0.28.0-beta.1-win-x64.fb2k-component)**
 
 Installable `.fb2k-component` package for foobar2000 2.x x64.
 In foobar2000: **Preferences → Components → Install…**, then restart.
 
-[Download the alpha and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.24.0-alpha.1)
+[Download the beta and matching source](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.28.0-beta.1)
 Development was AI-assisted; audio and threading review and reproducible bug reports
 are particularly welcome.
 
@@ -51,10 +53,10 @@ for suggesting playlist popups and for the UI/file-release feedback.
 - Automatic NVIDIA CUDA acceleration with CPU fallback; preparation progress, cancellation and reusable cache. Separation completes before use.
 - Floating playlist title and close button integrated into the selected theme.
 
-## Optional stems engine
+## Optional stems engine — experimental
 
 The component works without Python. For stems, install Python 3.10–3.12, download
-the [optional engine installer ZIP](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.24.0-alpha.1/foo_dj-stems-engine-0.24.0-alpha.1.zip), extract it and run
+the [optional engine installer ZIP](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-stems-engine-0.28.0-beta.1.zip), extract it and run
 `./install-stems.ps1 -DownloadModel` in PowerShell. It downloads the dependencies
 and htdemucs model separately. NVIDIA CUDA is selected when available; otherwise CPU.
 Use `-CPUOnly` for a CPU-only installation. Existing CPU users must rerun the
@@ -65,10 +67,10 @@ See [setup, cache size and limits](docs/STEMS.md).
 
 Windows x64 and foobar2000 2.x x64, Default User Interface. Development use was on
 foobar2000 2.26.3 preview (2026-11-08); compatibility with other 2.x versions has
-not been validated. There is no x86, ARM64, macOS or native Columns UI build.
+not been validated. This beta is x64 only. An earlier x86 alpha exists; x86 beta awaits feedback. No ARM64, macOS or native Columns UI build is supplied.
 
 Prefer an isolated portable profile for the first test. Install
-`foo_dj-0.24.0-alpha.1-win-x64.fb2k-component` with
+`foo_dj-0.28.0-beta.1-win-x64.fb2k-component` with
 **Preferences → Components → Install…**, then restart. In Default UI layout editing
 mode, add **DJ Decks** (Utilities). A large panel works best; start around 900 × 650 px.
 This component does not require WebView2, Spider Monkey Panel or Smooth Browser.
@@ -78,7 +80,7 @@ a missing MSVCP140/VCRUNTIME140 dependency, install the official
 Do not download individual DLLs from third-party sites.
 
 The release includes the installable component, matching full-source ZIP and SHA-256
-checksums. Install/load on a clean portable profile has not yet been validated.
+checksums. The user confirms x64 installation, real-track playback and save/restore. The packaged beta was also installed and confirmed working by the user; x86 beta feedback is pending.
 For local builds and packaging, see [build instructions](docs/BUILD.md).
 
 ## Quick use
@@ -119,8 +121,7 @@ grids are used by SYNC. A phase shift cannot correct an inaccurate BPM or a vary
 
 ## Limits worth knowing
 
-Shutdown has sometimes taken over 40 seconds in the development profile; its cause
-has not been isolated. Do not present this alpha as production-stable. Beat detection
+The user reports that slow starts/closes predate this component work; they are not a demonstrated component-specific blocker. Wider beta testing remains welcome. Beat detection
 can reject real music, particularly rubato or weak/percussion-free material. Source
 sample-rate conversion is linear. No headphone cue output, EQ, limiter, beat-looping
 or master/slave continuous sync is implemented.

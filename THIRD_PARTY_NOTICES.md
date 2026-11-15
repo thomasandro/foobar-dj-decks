@@ -1,5 +1,13 @@
 # Third-party notices
 
+The optional foo_scrobble adapter bundles the upstream Track, UnixClock and
+ScrobbleService interface declarations from gix/foo_scrobble commit
+bc9e53db898f3293240a2477732ef909cb9477eb (Copyright Nico Rieck, MIT).
+The Track header include was adapted to this SDK; the service GUID is defined in
+the adapter. See `licenses/foo_scrobble-MIT.txt` and
+`sdk/foobar2000/foo_dj/third_party/foo_scrobble`. The installed foo_scrobble component
+itself is external and is not redistributed or modified.
+
 Original DJ Decks code is offered under the MIT license in [LICENSE](LICENSE).
 The component began from the foobar2000 SDK sample. This is an altered derivative,
 not an official foobar2000 component. Original SDK and dependency notices remain

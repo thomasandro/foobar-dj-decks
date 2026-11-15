@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 
 #include <ole2.h>
 #include <atlimage.h>
@@ -28,10 +28,16 @@
 #include "dj_language.h"
 #include "dj_skin.h"
 #include "deck_queue.h"
+#include "queue_format.h"
+#include "queue_duration_hook.h"
 #include "auto_mix.h"
 #include "queue_window.h"
 #include "stem_cache.h"
 #include "stem_job.h"
+#include "stem_cache_manager.h"
+#include "listening_policy.h"
+#include "scrobble_bridge.h"
+#include <ctime>
 #include <commctrl.h>
 #include "third_party/soundtouch/include/SoundTouch.h"
 
@@ -59,6 +65,12 @@ namespace {
 	static cfg_int cfg_flat({0x49961560,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},0);
     static cfg_int cfg_colorA({0x49961561,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},0);
     static cfg_int cfg_colorB({0x49961562,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},1);
+    static cfg_int cfg_replaygain({0xa660da20,0x74ab,0x44f7,{0x95,0x4a,0x62,0xc3,0x92,0x13,0x51,0x03}},0);
+    static cfg_int cfg_scrobble({0xa660da21,0x74ab,0x44f7,{0x95,0x4a,0x62,0xc3,0x92,0x13,0x51,0x03}},0);
+    static std::atomic<int> g_replaygain{0};
+    static std::atomic<bool> g_scrobble{false},g_scrobbleReady{false};
+    static cfg_string cfg_queueFormat({0xbe993a10,0x366b,0x45b7,{0x9a,0x14,0x3a,0x6d,0x81,0xb2,0x11,0x5e}},"%artist% - %title% '('%length%')'");
+    static cfg_int cfg_queueNumbers({0xbe993a11,0x366b,0x45b7,{0x9a,0x14,0x3a,0x6d,0x81,0xb2,0x11,0x5e}},0);
     static std::atomic<bool> g_english{false};
 	static const wchar_t * Tr(const wchar_t * text) { return dj_language::lookup(text,g_english.load()); }
 
@@ -105,6 +117,7 @@ namespace {
 	struct Deck {
 		std::shared_ptr<dj_stems::Reader> stems;
         unsigned sourceRate=0,sourceChannels=0;
+        dj_listening::Clock listening;
 		std::shared_ptr<input_helper> helper;    // le decodeur de foobar2000, ouvert sur le fichier
 		std::shared_ptr<Waveform> wave;          // forme d'onde du fichier
 		bool loaded = false;                     // un fichier est charge
@@ -433,7 +446,7 @@ namespace {
 
 	class CDjDropTarget;   // defini plus bas : recoit les morceaux glisses sur le panneau
 
-	class CDjPanel : public ui_element_instance, public CWindowImpl<CDjPanel>, public metadb_io_callback_dynamic_impl_base {
+	class CDjPanel : public ui_element_instance, public CWindowImpl<CDjPanel>, public metadb_io_callback_dynamic_impl_base, public completion_notify_receiver {
 	public:
 		// Nom interne de la classe de fenetre (identifiant unique, different de celui de l'exemple).
 		DECLARE_WND_CLASS_EX(TEXT("{3E9B6D14-2A7C-4F58-B1D6-8A4C05E7D932}"), CS_VREDRAW | CS_HREDRAW, (-1));
@@ -482,14 +495,18 @@ namespace {
 
     public:
         void on_changed_sorted(metadb_handle_list_cref items, bool) override {
-            if(!m_hWnd) return;
-            for(int i=0;i<2;++i) if(!m_savedPath[i].empty()) {
-                auto h=metadb::get()->handle_create(m_savedPath[i].c_str(),m_savedSubsong[i]);
-                if(metadb_handle_list_helper::bsearch_by_pointer(items,h)!=SIZE_MAX) { PostMessage(WM_APP+173); break; }
+            if(!m_hWnd)return;
+            for(int i=0;i<2;++i){
+                for(t_size n=0;n<m_queueHandles[i].get_count();++n)if(metadb_handle_list_helper::bsearch_by_pointer(items,m_queueHandles[i][n])!=SIZE_MAX){PostMessage(WM_APP+173);return;}
+                if(!m_savedPath[i].empty()){auto h=metadb::get()->handle_create(m_savedPath[i].c_str(),m_savedSubsong[i]);if(metadb_handle_list_helper::bsearch_by_pointer(items,h)!=SIZE_MAX){PostMessage(WM_APP+173);return;}}
             }
         }
+        void on_task_completion(unsigned id,unsigned status) override {
+            orphan_task(id);if(status!=metadb_io::load_info_success)console::print("DJ Decks: some playlist metadata could not be read; use Reload playlist metadata to retry.");
+            if(m_hWnd)PostMessage(WM_APP+173);
+        }
     private:
-        LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); UpdateQueue(0); UpdateQueue(1); return 0; }
+        LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); UpdateQueue(0,m_queueWindow[0].list?m_queueWindow[0].selected():std::vector<size_t>{}); UpdateQueue(1,m_queueWindow[1].list?m_queueWindow[1].selected():std::vector<size_t>{}); return 0; }
         void RefreshDeckTags(int deck, bool readFile = false);
         void ReleaseForTags(int deck);
         bool ReopenAfterTags(int deck);
@@ -542,7 +559,7 @@ namespace {
 		BOOL OnEraseBkgnd(CDCHandle);
 		// On ne redessine vite que si quelque chose bouge (lecture, curseur deplace) ; au repos, 4 fois par seconde.
 		void OnTimer(UINT_PTR id) {
-            StemsTick();AutomationTick();
+            ScrobbleTick();StemsTick();AutomationTick();
 			if (m_cachePlaying[0] || m_cachePlaying[1] || m_drag != 0) { Invalidate(); return; }
 			CRect client; GetClientRect(&client);
 			for (int i = 0; i < 2; ++i) {
@@ -573,6 +590,34 @@ namespace {
         void UseStems(int deck,unsigned mask);
         void OriginalAudio(int deck);
         void CancelStems();
+        std::atomic<double> m_rgTrack[2]={{1},{1}},m_rgAlbum[2]={{1},{1}};
+        ULONGLONG m_lastScrobbleTick=0; std::atomic<bool> m_scrobbleAllowed[2]={{false},{false}};
+        void UpdateReplayGain(int deck,const file_info& info){
+            t_replaygain_config cfg;cfg.m_processing_mode=t_replaygain_config::processing_mode_gain_and_peak;
+            cfg.m_source_mode=t_replaygain_config::source_mode_track;m_rgTrack[deck]=dj_listening::safeScale(cfg.query_scale(info));
+            cfg.m_source_mode=t_replaygain_config::source_mode_album;m_rgAlbum[deck]=dj_listening::safeScale(cfg.query_scale(info));
+        }
+        void ScrobbleTick(){
+            auto now=GetTickCount64();if(now-m_lastScrobbleTick<1000)return;m_lastScrobbleTick=now;
+            try{
+                auto api=g_scrobble.load()?dj_scrobble::service():foo_scrobble::ScrobbleService::ptr{};
+                bool active=g_scrobble.load()&&api.is_valid()&&dj_scrobble::hostEnabled();g_scrobbleReady=active;
+                metadb_handle_ptr normal;playback_control::get()->get_now_playing(normal);
+                for(int i=0;i<2;++i){double duration=0;long long start=0;
+                    metadb_handle_ptr h;if(!m_savedPath[i].empty())h=metadb::get()->handle_create(m_savedPath[i].c_str(),m_savedSubsong[i]);
+                    bool allowed=active&&h.is_valid()&&(!normal.is_valid()||normal!=h);m_scrobbleAllowed[i]=allowed;
+                    {std::lock_guard<std::mutex> lock(m_lock);auto& d=m_deck[i];if(!allowed){d.listening.discardUnsubmitted();continue;}if(!d.listening.eligible(d.length))continue;duration=d.length;start=d.listening.started;}
+                    file_info_impl info;if(!h->get_info(info))continue;
+                    auto item=dj_scrobble::track(info,duration,start);if(item.Artist.is_empty()||item.Title.is_empty())continue;
+                    // Do not duplicate the track already managed by normal foobar playback.
+
+                    {std::lock_guard<std::mutex> lock(m_lock);m_deck[i].listening.submitted=true;}
+                    api->ScrobbleAsync(std::move(item));
+                    console::print("DJ Decks: qualified deck listening queued through foo_scrobble.");
+                }
+            }catch(const std::exception& e){g_scrobbleReady=false;for(auto& allowed:m_scrobbleAllowed)allowed=false;console::print((std::string("DJ Decks: foo_scrobble bridge: ")+e.what()).c_str());}
+        }
+
         void StemsTick();
         bool m_chain[2]={false,false},m_alternate=false,m_autoChanging=false,m_autoArmed[2]={false,false};
         bool m_altAvailable[2]={true,true};
@@ -586,6 +631,32 @@ namespace {
         bool NextQueue(int deck,bool play);
         std::vector<dj_queue::Item> m_queue[2];
         std::vector<std::wstring> m_queueLabels[2];
+        metadb_handle_list m_queueHandles[2],m_dropHandles;
+        std::set<std::string> m_queueInfoAttempted;bool m_forceQueueInfo=false;
+        void EnsureQueueInfo(){
+            // Keep all old references alive until BOTH new lists have been built:
+            // moving the last occurrence A -> B must not evict its cached metadata.
+            metadb_handle_list retained[2];
+            for(int i=0;i<2;++i)for(auto& item:m_queue[i])retained[i].add_item(metadb::get()->handle_create(item.path.c_str(),item.subsong));
+            m_queueHandles[0]=retained[0];m_queueHandles[1]=retained[1];
+            std::set<std::string> live;for(int i=0;i<2;++i)for(auto& item:m_queue[i])live.insert(GridKey(item.path,item.subsong));
+            for(auto it=m_queueInfoAttempted.begin();it!=m_queueInfoAttempted.end();)if(!live.count(*it))it=m_queueInfoAttempted.erase(it);else ++it;
+            if(have_task(1))return;
+            metadb_handle_list missing;bool force=m_forceQueueInfo;m_forceQueueInfo=false;
+            for(int i=0;i<2;++i)for(t_size n=0;n<retained[i].get_count();++n){
+                auto h=retained[i][n];file_info_impl info;
+                bool have=h->get_info(info);auto title=have?info.meta_get("TITLE",0):nullptr;auto artist=have?info.meta_get("ARTIST",0):nullptr;
+                bool need=force||!have||!std::isfinite(h->get_length())||h->get_length()<=0||!title||!*title||!artist||!*artist;
+                if(!need)continue;
+                auto native=filesystem::g_get_native_path(h->get_path());if(native.is_empty())continue;
+                auto key=GridKey(h->get_path(),h->get_subsong_index());if(!m_queueInfoAttempted.insert(key).second)continue;
+                missing.add_item(h);
+            }
+            if(!missing.get_count())return;
+            try{metadb_io_v2::get()->load_info_async(missing,metadb_io::load_info_force,nullptr,metadb_io_v2::op_flag_silent|metadb_io_v2::op_flag_no_errors,create_task(1));}
+            catch(const std::exception& e){orphan_task(1);console::print((std::string("DJ Decks: playlist metadata: ")+e.what()).c_str());}
+        }
+
         int m_queueCurrent[2]={-1,-1};
         DjQueueWindow m_queueWindow[2];
         void OpenQueue(int deck);
@@ -594,6 +665,39 @@ namespace {
         void AddQueue(int deck,IDataObject* object,size_t before);
         std::vector<dj_queue::Item> ExtractItems(IDataObject* object);
         std::wstring QueueLabel(const dj_queue::Item& item);
+        double QueueDuration(const dj_queue::Item& item,metadb_handle_ptr handle){
+            double seconds=handle->get_length();if(std::isfinite(seconds)&&seconds>0)return seconds;
+            std::lock_guard<std::mutex> lock(m_lock);for(int i=0;i<2;++i)if(m_savedPath[i]==item.path&&m_savedSubsong[i]==item.subsong&&m_deck[i].loaded)return m_deck[i].length;
+            return 0;
+        }
+        titleformat_object::ptr m_queueFormat;std::string m_queueFormatText;
+        void QueueFormatMenu(int choice){
+            if(choice==305){cfg_queueNumbers=cfg_queueNumbers.get()?0:1;}
+            else if(choice>=300&&choice<304){cfg_queueFormat=dj_queue_format::presets[choice-300];}
+            else if(choice==304){
+                std::wstring script=pfc::stringcvt::string_wide_from_utf8(cfg_queueFormat.get().get_ptr()).get_ptr();
+                auto validate=[this](const std::wstring& input,std::wstring& preview){
+                    titleformat_object::ptr format;std::string text=pfc::stringcvt::string_utf8_from_wide(input.c_str()).get_ptr();
+                    if(input.empty()||input.size()>4096||!titleformat_compiler::get()->compile(format,text.c_str())){preview=g_english.load()?L"Invalid title-format expression.":L"Expression de format invalide.";return false;}
+                    preview=g_english.load()?L"Valid expression. Preview: ":L"Expression valide. Aperçu : ";
+                    for(int deck=0;deck<2;++deck)if(!m_queue[deck].empty()){auto& item=m_queue[deck][0];auto h=metadb::get()->handle_create(item.path.c_str(),item.subsong);pfc::string8 result;DjQueueDurationHook duration(QueueDuration(item,h));h->format_title(&duration,result,format,nullptr);preview+=dj_queue_format::singleLine(pfc::stringcvt::string_wide_from_utf8(result).get_ptr());return true;}
+                    preview+=g_english.load()?L"load a playlist to preview.":L"charger une playlist pour l'aperçu.";return true;
+                };
+                if(!dj_queue_format::edit(m_hWnd,g_english.load(),script,validate))return;
+                cfg_queueFormat=pfc::stringcvt::string_utf8_from_wide(script.c_str()).get_ptr();
+            }
+            m_queueFormat.release();m_queueFormatText.clear();
+            for(int i=0;i<2;++i)UpdateQueue(i,m_queueWindow[i].list?m_queueWindow[i].selected():std::vector<size_t>{});
+        }
+        bool TransferQueue(int from,int to,const std::vector<size_t>& selection,size_t before,bool moving){
+            std::vector<size_t> inserted;
+            if(!dj_queue::transfer(m_queue[from],m_queueCurrent[from],m_queue[to],m_queueCurrent[to],selection,before,moving,inserted)){
+                ::MessageBoxW(m_hWnd,g_english.load()?L"Cannot transfer: invalid selection or playlist storage limit (10000 tracks, 3 MiB).":L"Transfert impossible : sélection invalide ou limite des listes (10000 pistes, 3 Mio).",L"DJ Decks",MB_OK|MB_ICONINFORMATION);return false;
+            }
+            if(m_savedPath[to].empty()&&!inserted.empty()){m_queueCurrent[to]=(int)inserted.front();auto item=m_queue[to][inserted.front()];LoadDeck(to,item.path.c_str(),item.subsong);}
+            SaveSession();UpdateQueue(from,moving?std::vector<size_t>{}:selection);UpdateQueue(to,inserted);return true;
+        }
+
 		LRESULT OnRestoreSession(UINT, WPARAM, LPARAM, BOOL &);
 		std::string m_savedPath[2];
 		t_uint32 m_savedSubsong[2] = {0, 0};
@@ -701,6 +805,7 @@ namespace {
 	CDjPanel::CDjPanel(ui_element_config::ptr config, ui_element_instance_callback_ptr p_callback) : m_callback(p_callback), m_config(config) {
 		g_english = cfg_language.get() != 0;
         dj_skin::flat=cfg_flat.get()!=0;
+        g_replaygain=(cfg_replaygain.get()>=0&&cfg_replaygain.get()<=2)?cfg_replaygain.get():0;g_scrobble=cfg_scrobble.get()!=0;
         dj_skin::colorIndex[0]=(cfg_colorA.get()>=0&&cfg_colorA.get()<8)?cfg_colorA.get():0;
         dj_skin::colorIndex[1]=(cfg_colorB.get()>=0&&cfg_colorB.get()<8)?cfg_colorB.get():1;
 		m_fixedPitch[0] = m_fixedPitch[1] = true;
@@ -1052,7 +1157,7 @@ namespace {
         auto add=[&](CRect r,const wchar_t* fr,const wchar_t* english){if(r.Width()>0 && r.Height()>0)m_tips.push_back({r,en?english:fr});};
         for(int i=0;i<2;++i) {
             const auto L=MakeLayout(i,client);
-            add(L.stemPrepare,L"Préparer les stems en local (modèle Demucs), progression/cache ; cliquer pour annuler. Une fois prêts : menu pour activer les quatre ou revenir au son original.",L"Prepare local stems (Demucs model), progress/cache; click to cancel. When ready: menu to enable all four or return to original audio.");
+            add(L.stemPrepare,L"Stems expérimentaux : préparer en local (modèle Demucs), progression/cache ; cliquer pour annuler. Une fois prêts : menu pour activer les quatre ou revenir au son original.",L"Experimental stems: prepare locally (Demucs model), progress/cache; click to cancel. When ready: menu to enable all four or return to original audio.");
             const wchar_t* stemFr[]={L"Batterie/percussions",L"Basse",L"Autres instruments",L"Voix"};
             const wchar_t* stemEn[]={L"Drums/percussion",L"Bass",L"Other instruments",L"Vocals"};
             for(int k=0;k<4;++k){
@@ -1089,7 +1194,7 @@ namespace {
         add(PlayBothRect(client),L"Inverser les deux \u00e9tats : lecture ensemble, pause ensemble ou \u00e9change de la platine en lecture.",L"Toggle both states: play together, pause together or swap the playing deck.");
         CRect fader=FaderStrip(client);fader.left=FaderLeft(client)-10;fader.right=FaderRight(client)+10;
         add(fader,L"Crossfader : doser les platines A et B.",L"Crossfader: blend decks A and B.");
-        add(LanguageRect(client,false),L"Réglages : langue, thème et couleurs des decks. DJ Decks " FOO_DJ_VERSION_W,L"Settings: language, theme and deck colors. DJ Decks " FOO_DJ_VERSION_W);
+        add(LanguageRect(client,false),L"Réglages : langue, thème, couleurs des decks et cache des stems. DJ Decks " FOO_DJ_VERSION_W,L"Settings: language, theme, deck colors and stem cache. DJ Decks " FOO_DJ_VERSION_W);
         add(LanguageRect(client,true),L"Interface et infobulles en anglais.",L"English interface and tooltips.");
         for(size_t n=0;n<m_tips.size();++n) {
             TOOLINFOW ti={sizeof(ti)};ti.uFlags=TTF_SUBCLASS;ti.hwnd=m_hWnd;ti.uId=n+1;ti.rect=m_tips[n].rect;ti.lpszText=LPSTR_TEXTCALLBACKW;
@@ -1442,7 +1547,28 @@ namespace {
             const wchar_t* eng[]={L"Cyan",L"Orange",L"Blue",L"Purple",L"Green",L"Rose / red",L"Gold",L"Grey"};
             for(int deck=0;deck<2;++deck){HMENU colors=CreatePopupMenu();for(int n=0;n<8;++n)AppendMenuW(colors,MF_STRING|(dj_skin::colorIndex[deck].load()==n?MF_CHECKED:0),100+deck*20+n,en?eng[n]:fr[n]);
                 AppendMenuW(menu,MF_POPUP,(UINT_PTR)colors,deck?(en?L"Deck B color":L"Couleur deck B"):(en?L"Deck A color":L"Couleur deck A"));}
+            AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,200,en?L"Stem cache…":L"Cache des stems…");
+            HMENU rg=CreatePopupMenu();const wchar_t* rgFr[]={L"Désactivé",L"Piste (gain + crête)",L"Album (gain + crête)"};const wchar_t* rgEn[]={L"Off",L"Track (gain + peak)",L"Album (gain + peak)"};
+            for(int n=0;n<3;++n)AppendMenuW(rg,MF_STRING|(g_replaygain.load()==n?MF_CHECKED:0),210+n,en?rgEn[n]:rgFr[n]);
+            AppendMenuW(menu,MF_POPUP,(UINT_PTR)rg,L"ReplayGain");
+            AppendMenuW(menu,MF_STRING|(g_scrobble.load()?MF_CHECKED:0),220,en?L"Scrobble audible decks via foo_scrobble":L"Scrobbler les platines audibles via foo_scrobble");
+            AppendMenuW(menu,MF_STRING,221,en?L"foo_scrobble diagnostic…":L"Diagnostic foo_scrobble…");
+            HMENU formats=CreatePopupMenu();const wchar_t* formatFr[]={L"Artiste - Titre (durée)",L"Titre - Artiste (durée)",L"Album | N° de piste. Artiste - Titre (durée)",L"Artiste - Titre"};const wchar_t* formatEn[]={L"Artist - Title (duration)",L"Title - Artist (duration)",L"Album | Track no. Artist - Title (duration)",L"Artist - Title"};
+            bool preset=false;for(int n=0;n<4;++n){bool checked=std::string(cfg_queueFormat.get().get_ptr())==dj_queue_format::presets[n];preset=preset||checked;AppendMenuW(formats,MF_STRING|(checked?MF_CHECKED:0),300+n,en?formatEn[n]:formatFr[n]);}
+            AppendMenuW(formats,MF_STRING|(!preset?MF_CHECKED:0),304,en?L"Custom format…":L"Format personnalisé…");AppendMenuW(formats,MF_SEPARATOR,0,nullptr);AppendMenuW(formats,MF_STRING|(cfg_queueNumbers.get()?MF_CHECKED:0),305,en?L"Show playlist position numbers":L"Afficher les numéros de position dans la liste");AppendMenuW(formats,MF_SEPARATOR,0,nullptr);AppendMenuW(formats,MF_STRING,306,en?L"Reload playlist metadata":L"Relire les métadonnées des playlists");AppendMenuW(menu,MF_POPUP,(UINT_PTR)formats,en?L"Playlist display":L"Affichage des playlists");
             auto choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,screen.x,screen.y,0,m_hWnd,nullptr);DestroyMenu(menu);
+            if(choice==221){m_pressedButton.SetRectEmpty();::ReleaseCapture();auto detected=dj_scrobble::probe();::MessageBoxW(m_hWnd,detected.message(en).c_str(),L"DJ Decks - foo_scrobble",MB_OK|MB_ICONINFORMATION);}
+            if(choice==306){m_queueInfoAttempted.clear();m_forceQueueInfo=true;for(int i=0;i<2;++i)UpdateQueue(i,m_queueWindow[i].list?m_queueWindow[i].selected():std::vector<size_t>{});}
+            if(choice>=300&&choice<=305){m_pressedButton.SetRectEmpty();::ReleaseCapture();QueueFormatMenu((int)choice);}
+
+            if(choice>=210&&choice<=212){g_replaygain=(int)choice-210;cfg_replaygain=(int)choice-210;}
+            if(choice==220){
+                bool enable=!g_scrobble.load();
+                if(enable&&!dj_scrobble::service().is_valid()){m_pressedButton.SetRectEmpty();::ReleaseCapture();auto detected=dj_scrobble::probe();::MessageBoxW(m_hWnd,detected.message(en).c_str(),L"DJ Decks - foo_scrobble",MB_OK|MB_ICONINFORMATION);}
+                else{g_scrobble=enable;cfg_scrobble=enable;g_scrobbleReady=false;{std::lock_guard<std::mutex> lock(m_lock);for(auto& d:m_deck)d.listening.discardUnsubmitted();}m_lastScrobbleTick=0;ScrobbleTick();}
+            }
+
+            if(choice==200){m_pressedButton.SetRectEmpty();::ReleaseCapture();std::set<std::wstring> keys;{std::lock_guard<std::mutex> lock(m_lock);for(int i=0;i<2;++i)if(m_deck[i].stems)keys.insert(dj_stems::wide(m_stemKey[i]));}if(m_stemJob)keys.insert(dj_stems::wide(m_stemJob->sourceKey));dj_stems::manageCache(m_hWnd,en,keys);for(int i=0;i<2;++i)CheckStems(i);}
             if(choice==1 || choice==2){g_english=choice==2;cfg_language=choice==2;}
             if(choice==10||choice==11){dj_skin::flat=choice==11;cfg_flat=choice==11;}
             if(choice>=100&&choice<108){dj_skin::colorIndex[0]=(int)choice-100;cfg_colorA=(int)choice-100;}
@@ -1632,6 +1758,7 @@ namespace {
           m_deck[deck].musicalKey=key; m_deck[deck].bpm=bpmText; m_deck[deck].bpmValue=bpm;
           if(readFile) m_error[deck].clear();
         }
+        UpdateReplayGain(deck,haveDisk?static_cast<const file_info&>(diskInfo):static_cast<const file_info&>(info));
         m_gridStamp[deck]=0; Invalidate();
         if(readFile) {
             wchar_t values[256];
@@ -1768,6 +1895,7 @@ namespace {
 			file_info_impl info;
 			nd.helper->get_info(subsong, info, abort);
 			nd.length = info.get_length();
+
             // Key analysers can store metadata in foobar's DB without writing the file.
             // Prefer the host's current metadata, falling back to decoder file tags.
             file_info_impl libraryInfo;
@@ -1826,6 +1954,7 @@ namespace {
 
 			m_savedPath[deck] = path;
 			m_savedSubsong[deck] = subsong;
+            UpdateReplayGain(deck,haveLibraryInfo?static_cast<const file_info&>(libraryInfo):static_cast<const file_info&>(info));
             CheckStems(deck);
 			m_manualGrid[deck] = false; m_manualPhase[deck] = 0;
 			const auto savedGrid = m_gridLibrary.find(GridKey(m_savedPath[deck],subsong));
@@ -2154,10 +2283,11 @@ namespace {
         try {
             auto h=metadb::get()->handle_create(item.path.c_str(),item.subsong);
             file_info_impl info;
-            if(h->get_info(info)) {
-                auto title=info.meta_get("TITLE",0);auto artist=info.meta_get("ARTIST",0);
-                if(title&&*title){std::wstring label=pfc::stringcvt::string_wide_from_utf8(title).get_ptr();
-                    if(artist&&*artist){label+=L" — ";label+=pfc::stringcvt::string_wide_from_utf8(artist).get_ptr();}return label;}
+            {
+                std::string script=cfg_queueFormat.get().get_ptr();
+                if(!m_queueFormat.is_valid()||m_queueFormatText!=script){m_queueFormatText=script;if(!titleformat_compiler::get()->compile(m_queueFormat,script.c_str()))titleformat_compiler::get()->compile_force(m_queueFormat,dj_queue_format::presets[0]);}
+                pfc::string8 text;DjQueueDurationHook duration(QueueDuration(item,h));h->format_title(&duration,text,m_queueFormat,nullptr);
+                if(!text.is_empty())return dj_queue_format::singleLine(pfc::stringcvt::string_wide_from_utf8(text).get_ptr());
             }
         }catch(...){}
         auto n=item.path.find_last_of("/\\");std::string name=n==std::string::npos?item.path:item.path.substr(n+1);
@@ -2165,16 +2295,18 @@ namespace {
         if(item.subsong)label+=L" ["+std::to_wstring(item.subsong)+L"]";return label;
     }
     void CDjPanel::UpdateQueue(int deck,const std::vector<size_t>& selected) {
+        EnsureQueueInfo();
         auto& cached=m_queueLabels[deck];cached.clear();
         for(auto& item:m_queue[deck])cached.push_back(QueueLabel(item));
         if(m_queueWindow[deck].m_hWnd) {
             std::vector<std::wstring> labels;size_t n=0;
-            for(auto& item:cached){auto label=std::to_wstring(n+1)+L". "+item;if((int)n==m_queueCurrent[deck])label=L"▶ "+label;labels.push_back(label);++n;}
+            for(auto& item:cached){auto label=(cfg_queueNumbers.get()?std::to_wstring(n+1)+L". ":L"")+item;if((int)n==m_queueCurrent[deck])label=L"▶ "+label;labels.push_back(label);++n;}
             m_queueWindow[deck].refresh(labels,selected);
         }Invalidate();
     }
     void CDjPanel::OpenQueue(int deck) {
         auto& window=m_queueWindow[deck];
+        window.received=[this,deck](DjQueueWindow* source,const std::vector<size_t>& selection,size_t before,bool moving){if(source!=&m_queueWindow[1-deck])return false;return TransferQueue(1-deck,deck,selection,before,moving);};
         window.accepts=[this](IDataObject* o){return CanAccept(o);};
         window.dropped=[this,deck](IDataObject* o,size_t before){AddQueue(deck,o,before);};
         window.action=[this,deck](int a,std::vector<size_t> s,size_t b){QueueAction(deck,a,s,b);};
@@ -2203,7 +2335,7 @@ namespace {
         SaveSession();UpdateQueue(deck,selected);
     }
     void CDjPanel::AddQueue(int deck,IDataObject* object,size_t before) {
-        auto items=ExtractItems(object);if(items.empty())return;
+        auto items=ExtractItems(object);struct ReleaseDropHandles{metadb_handle_list& handles;~ReleaseDropHandles(){handles.remove_all();}} releaseDrop{m_dropHandles};if(items.empty())return;
         auto& queue=m_queue[deck];before=(std::min)(before,queue.size());
         if(queue.size()+items.size()>10000){MessageBox(g_english.load()?L"Maximum 10000 tracks per deck.":L"Maximum 10000 morceaux par platine.",L"DJ Decks",MB_OK);return;}
         auto candidate=queue;candidate.insert(candidate.begin()+before,items.begin(),items.end());
@@ -2217,10 +2349,11 @@ namespace {
     }
     std::vector<dj_queue::Item> CDjPanel::ExtractItems(IDataObject* object) {
         std::vector<dj_queue::Item> items;
-        if(!object)return items;
+        m_dropHandles.remove_all();if(!object)return items;
         // Prefer native foobar handles (including all subsongs) when available.
         try {pfc::com_ptr_t<IDataObject> obj(object);metadb_handle_list handles;
             if(SUCCEEDED(ole_interaction::get()->parse_dataobject_immediate(obj,handles)) && handles.get_count()) {
+                m_dropHandles=handles;
                 for(t_size n=0;n<handles.get_count()&&n<10001;++n)items.push_back({handles[n]->get_path(),handles[n]->get_subsong_index()});return items;
             }
         }catch(...){}
@@ -2486,7 +2619,7 @@ namespace {
 				d.srcPos = 0;
 				d.pending.clear();
 				d.pendingPos = 0;
-				d.framesPlayed = 0;
+				d.framesPlayed = 0; d.listening={};
 				d.eof = false; d.stretch.reset(); d.stretchFlushed = false;
 			} catch (...) {
 				m_error[deck] = L"Erreur au retour au d\u00e9but";
@@ -2515,7 +2648,7 @@ namespace {
 					if(d.stems)d.stems->seek(0);else d.helper->seek(0, abort);
 					d.src.clear(); d.srcPos = 0;
 					d.pending.clear(); d.pendingPos = 0;
-					d.framesPlayed = 0; d.eof = false; d.stretch.reset(); d.stretchFlushed = false;
+					d.framesPlayed = 0; d.listening={}; d.eof = false; d.stretch.reset(); d.stretchFlushed = false;
 				} catch (const std::exception & e) {
 					pfc::stringcvt::string_wide_from_utf8 message(e.what());
 					m_error[i] = message.get_ptr(); return;
@@ -2601,6 +2734,7 @@ namespace {
 				const double v0 = (std::min)(1.0, (std::max)(0.0, (double)m_volume[0].load()));
 				const double v1 = (std::min)(1.0, (std::max)(0.0, (double)m_volume[1].load()));
 				dj_auto::gains(x,m_linearFade.load(),gains);gains[0]*=v0*v0;gains[1]*=v1*v1;
+                for(int i=0;i<2;++i)gains[i]*=dj_listening::gain(g_replaygain.load(),m_rgTrack[i].load(),m_rgAlbum[i].load());
 			};
 			double prevGain[2];
 			computeGains(prevGain);
@@ -2674,6 +2808,8 @@ namespace {
 								}
 								d.pendingPos += f * kOutChannels;
 								d.framesPlayed += f * speeds[i];
+                                bool audibleStem=!d.stems; if(d.stems)for(int k=0;k<4;++k)audibleStem=audibleStem||d.stems->target(k)>0;
+                                d.listening.consume(f,outRate,audibleStem?targetGain[i]:0.,g_scrobble.load()&&g_scrobbleReady.load()&&m_scrobbleAllowed[i].load(),(long long)std::time(nullptr));
 							}
 						}
 					}

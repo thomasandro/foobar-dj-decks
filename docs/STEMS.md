@@ -1,6 +1,6 @@
-# Local stems — 0.24.0-dev
+# Local stems — experimental / expérimentaux
 
-Experimental first version: drums, bass, other instruments and vocals. These are
+The component is beta; stem separation remains experimental / La séparation en stems reste expérimentale. Four estimated parts: drums, bass, other instruments and vocals. These are
 estimated from a finished mix; they are not the original studio multitracks.
 
 ## Use / Utilisation
@@ -69,8 +69,9 @@ parameters in a future worker requires a new engine/cache version.
 
 Four raw float32 stereo files at 44.1 kHz, about **84.7 MB per minute** total. The
 native player memory-maps them instead of reading the entire track into RAM. Caches
-are reused on subsequent loads. No automatic eviction or cache manager in this version;
-close/release the decks before manually removing generated cache entries.
+are reused on subsequent loads. The gear menu now offers a [cache manager](STEM_CACHE.md)
+with prepared-stem size/count, refresh and safe clearing of unused entries. Active
+and preparing stems are retained. There is still no automatic eviction or size limit.
 
 Only local files, up to 30 minutes and 1 GiB decoded export input, are supported.
 Subsong export uses foobar's own decoder, including installed input components.

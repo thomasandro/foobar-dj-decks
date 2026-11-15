@@ -43,4 +43,17 @@ inline std::vector<size_t> move(std::vector<Item>& items,std::vector<size_t> sel
 inline void erase(std::vector<Item>& items,const std::vector<size_t>& selection) {
     for(size_t n=items.size();n-->0;)if(std::find(selection.begin(),selection.end(),n)!=selection.end())items.erase(items.begin()+n);
 }
+inline bool transfer(std::vector<Item>& source,int& sourceCurrent,std::vector<Item>& target,int& targetCurrent,std::vector<size_t> selection,size_t before,bool moving,std::vector<size_t>& inserted){
+    inserted.clear();if(&source==&target)return false;
+    std::sort(selection.begin(),selection.end());selection.erase(std::unique(selection.begin(),selection.end()),selection.end());
+    selection.erase(std::remove_if(selection.begin(),selection.end(),[&](size_t n){return n>=source.size();}),selection.end());if(selection.empty())return false;
+    if(target.size()+selection.size()>10000)return false;
+    auto from=source,to=target;std::vector<Item> items;for(auto n:selection)items.push_back(source[n]);before=(std::min)(before,to.size());to.insert(to.begin()+before,items.begin(),items.end());
+    if(moving)erase(from,selection);
+    if(encode(from).serialize().size()+encode(to).serialize().size()>3*1024*1024)return false;
+    inserted.reserve(items.size());for(size_t n=0;n<items.size();++n)inserted.push_back(before+n);
+    if(moving&&sourceCurrent>=0){if(std::binary_search(selection.begin(),selection.end(),(size_t)sourceCurrent))sourceCurrent=-1;else sourceCurrent-=(int)std::count_if(selection.begin(),selection.end(),[&](size_t n){return n<(size_t)sourceCurrent;});}
+    if(targetCurrent>=(int)before)targetCurrent+=(int)items.size();
+    source.swap(from);target.swap(to);return true;
+}
 }

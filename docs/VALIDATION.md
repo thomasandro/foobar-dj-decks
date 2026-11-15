@@ -1,4 +1,34 @@
-# Current validation — 0.20.0-alpha.1
+# Current validation — 0.28.0-beta.1
+
+User-confirmed: x64 installation, real-track playback, save/restore, and successful
+operation after installing this beta package with backup. Native automated tests
+pass; no foobar host was launched, captured or monitored by release checks.
+Stems remain experimental. x86 beta awaits Fabcore's feedback.
+The corrected quoted playlist format was verified by the user in foobar; the mock
+formatter test validates callback/Unicode handling, not foobar's script parser.
+
+
+## 0.27 playlists
+
+248 model copy/move cases cover insertion boundaries, subsongs, duplicates, active indices and capacity rollback. Hidden-window tests dispatch same-list/cross-list drops, Shift moves, cancellation and cleanup. The default format and one-line sanitization are checked. Real pointer hit testing and the title-format editor still need manual testing in foobar. No host was opened or captured.
+
+
+## 0.26 listening options
+
+The actual ScrobbleTick method passes with a mock service: opt-in, host toggle, unavailable service/metadata, normal-player conflict, independent decks and no repeated attempt after provider success/failure. No Last.fm requests are issued by these tests. Output-time qualification and SDK ReplayGain scale/fallback/peak cases pass separately. Actual interoperability with foo_scrobble inside the host remains unverified; see docs/SCROBBLING_REPLAYGAIN.md.
+
+
+## 0.25 cache manager
+
+Native cleanup tests cover byte counts, protected keys, open mapped-file readers,
+worker byte locks, unknown/read-only data, repeat clear and source/model/job
+preservation. Separate native tests reject Windows junctions at the cache root and
+both application-owned parent locations. The native/audio suite and real CUDA
+preparation/cache/cancellation tests pass. No host was launched or captured.
+Dialog behavior, user playback during cleanup and long sessions still require
+manual validation using [the beta sheet](BETA_TEST_PLAN.fr.md).
+
+## Earlier public validation
 
 Public x64 rebuild and native tests cover the actual automatic playback controller,
 fade duration/pause/direction/curves, 192 queue reorder cases, serialization, themed

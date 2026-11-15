@@ -1,17 +1,16 @@
 # Known issues and scope
 
-## Release blockers / checks still outstanding
+## Beta status — 0.28.0-beta.1 x64
 
-- Install and load the actual alpha package in a clean portable x64 foobar profile.
-  No host has been launched by the release-preparation scripts.
-- Investigate shutdown occasionally exceeding 40 seconds. Normal-close waits timed
-  out repeatedly during development; some closes completed later and others were
-  forced with the user's approval. Cause and attribution remain unproven.
-- Startup freezes were observed even with DJ Decks unloaded. One cleared after
-  closing the companion app, then did not recur immediately on reopening it.
-  This does not establish a cause or clear this component of involvement.
-- Runtime validation of French/English switching, saved language, startup restoration,
-  artwork, output-device changes and manual-grid persistence in a fresh profile.
+- User-confirmed: x64 installation, playback on real tracks, save/restore.
+  The newly packaged beta was also installed with backup and confirmed working by the user.
+- Slow starts/closes predate this component work according to the user; no
+  component-specific cause has been demonstrated, so this is not a beta blocker.
+- x86 beta validation awaits Fabcore's external feedback; this package is x64 only.
+- Stems remain experimental. Preparation time, separation artifacts and recovery
+  from GPU/decoder errors depend on the machine and source material.
+- Additional profiles/devices, narrow panels/DPI, output reconfiguration and the
+  foo_scrobble service adapter still benefit from wider beta testing.
 
 ## Audio and synchronization
 

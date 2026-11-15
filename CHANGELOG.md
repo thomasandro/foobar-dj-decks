@@ -1,5 +1,130 @@
 # Changelog
 
+## 0.28.0-beta.1 — 2026-11-15 (first public x64 beta)
+
+First x64 beta, including previously unpublished 0.25–0.27.3 changes detailed below.
+The packaged beta was installed with backup and confirmed working by the user before publication.
+
+- User confirms x64 installation, real-track playback and session save/restore.
+  Slow starts/closes predate the component work according to the user and are not
+  a demonstrated component-specific blocker. x86 beta awaits Fabcore's feedback.
+- Stem separation remains experimental, including preparation, CPU/CUDA fallback,
+  mute/gain/Solo and caching. Mark this in the guides and preparation tooltip.
+- Since the last public alpha: stem-cache size and safe cleanup, optional ReplayGain
+  and foo_scrobble integration, custom playlist formats and optional numbering,
+  cross-playlist copy/move, retained metadata and asynchronous reload.
+  Wider field testing remains needed, particularly the scrobbling service adapter.
+- Supply an x64 installable package, matching full source, optional stem installer
+  and SHA-256 checksums. No x86 beta is bundled or claimed.
+
+
+- Quote literal parentheses in all playlist presets, the initial saved-format
+  default and the custom-format example: `%artist% - %title% '('%length%')'`.
+  The user confirmed this resolves the missing durations in the running host.
+  Existing custom formats are preserved. Select the corrected preset to replace
+  a previously saved unquoted default.
+- Correct the preset regression expectation. The mock label test does not execute
+  foobar's title-format parser and did not detect this syntax issue; its scope is
+  limited to callback wiring and Unicode conversion.
+
+## 0.27.3-dev — local development, not published
+
+- Handle null-terminated title-format field names (SIZE_MAX) in the playlist
+  duration hook. Previously constructing a string with this sentinel could throw,
+  and the exception was hidden by the filename fallback. Leave unrelated fields
+  to foobar's formatter. This is a reproduced defect; confirmation in the live
+  host is still required for the reported missing durations.
+- Regression tests cover the actual duration hook with explicit and sentinel
+  lengths, plus the actual QueueLabel method with a mock metadata/format provider:
+  accented artist names, minutes, hours, unknown duration and an intentionally
+  duration-free custom format. No user music or running foobar is accessed.
+
+## 0.27.2-dev — local development, not published
+
+- Retain foobar metadata handles for both playlists and keep native drop handles
+  alive until insertion. Rebuild both retained lists before releasing old references,
+  including when the last occurrence moves A/B. Previously only paths/subsongs were
+  retained, and missing/incomplete metadata was never explicitly loaded.
+- Read missing title/artist/duration information asynchronously through foobar's
+  metadata loader for local items only. No tag writing or synchronous decoder calls
+  in playlist formatting. Deduplicate requests, serialize batches and do not retry
+  inaccessible/untagged files indefinitely. Removed entries prune retry bookkeeping.
+- Settings → Playlist display → Reload playlist metadata forces a background
+  refresh of both lists. Refresh labels when queued tracks' metadata changes and
+  retain the user's current selection. Orphan completion callbacks on panel close.
+- Tests execute the real metadata scheduling/retention method with a mock registry:
+  native handles, last-copy A/B moves, missing/partial tags and duration, subsongs,
+  duplicate requests, force reload, retries and failure cleanup. Live-host rendering
+  remains to be checked; no user music is read by the test harness.
+
+## 0.27.1-dev — local development, not published
+
+- Recognize foo_scrobble registry module names with or without .dll, path prefixes,
+  case/whitespace differences and the Scrobble component name. Keep the 1.6.x version
+  gate and exact service GUID check. The generic refusal now distinguishes missing
+  component, unsupported version and unavailable ScrobbleService, reporting the
+  detected version/module; Settings also offers a one-shot diagnostic.
+- Explicit playlist duration hook for `%length%` and `%length_seconds%`, shared
+  by preview and displayed labels. Use cached track length, falling back to the
+  matching loaded deck's decoder length. Preserve unknown-length semantics and
+  custom expressions that intentionally omit duration. No decoder is opened for
+  list formatting. Do not bypass formatting solely because cached file_info is absent.
+- Native tests cover detection variants/version rejection and the actual duration
+  hook, including long/unknown tracks. Live service discovery/display remain to be
+  confirmed by the user; no real scrobbles or foobar captures are made by tests.
+
+## 0.27.0-dev — local development, not published
+
+- Settings → Playlist display: four title-format presets and a free-form foobar
+  title-format editor with expression validation and a cached-metadata preview.
+  Default: `%artist% - %title% (%length%)`. The format is saved and shared by both
+  floating lists and the Current/Next previews, without changing tags or list order.
+- Automatically added playlist-position numbers are now optional and off by default.
+  Track-number tags can be requested explicitly in a custom format or preset.
+  Missing cached metadata still falls back to filename/subsong, without a decoder.
+- Drag selections between the two floating lists: copy by default, Shift to move.
+  Preserve source order, duplicates, subsongs and current-entry indices. Drop at the
+  destination row or end; an empty destination deck loads its first new entry paused.
+- Keep same-list reordering, add target-list edge scrolling, Escape/capture-loss
+  cancellation and ignore releases outside the two lists. Never remove source
+  entries until destination capacity and serialized-size limits are validated.
+- Native tests cover 248 model-transfer cases, atomic capacity rejection, hidden
+  window dispatch in both modes, cancellation, teardown and display defaults.
+  Real host pointer interaction and format-dialog behavior remain manual checks.
+
+## 0.26.0-dev — local development, not published
+
+- Settings: optional ReplayGain Off / Track / Album with gain + peak processing,
+  SDK fallback behavior, zero extra preamp and smoothed changes. Apply once to each
+  deck, including stems, without altering source files, caches or global preferences.
+- Optional foo_scrobble 1.6.x adapter, disabled by default. Counts audible output
+  time per deck and queues qualifying artist/title-tagged tracks through its existing
+  authenticated asynchronous service. Honors the global Scrobble tracks switch.
+- Pauses, seeks, inaudible decks and muted/zero-volume stems cannot earn time.
+  Suppress the deck path while normal foobar playback holds the same item. One
+  queue attempt per playback occurrence; no competing Now Playing notifications.
+- Version/service availability checks; direct-adapter metadata and filtering limits
+  are documented. Custom foo_scrobble mappings/skip/library filters are not inherited.
+- Native listening-policy tests, actual ScrobbleTick mock-backend tests and actual
+  SDK ReplayGain scale cases. No real submission, host capture or monitoring.
+- [Usage and remaining manual validation](docs/SCROBBLING_REPLAYGAIN.md).
+
+## 0.25.0-dev — local development, not published
+
+- Gear Settings → Stem cache opens a French/English manager showing prepared-stem
+  size/count, Refresh size and Clear unused cache, with freed-space/result reporting.
+- Scan/delete run on a below-normal background thread outside the audio mutex.
+  Active stems and preparations are retained; select Original audio or Stop/Release
+  on both decks and reopen the manager to make their caches eligible too.
+- Cleanup only touches five expected files in direct 64-hex cache folders.
+  Worker byte locks and file-handle preflight protect busy entries, including other
+  processes. Linked, read-only and unknown data remain; no recursive deletion.
+  Source music, the model/runtime, sessions and temporary jobs are preserved.
+- Refresh both decks' cache availability after closing the manager. Original audio
+  is not automatically replaced or stopped. There is no automatic cache eviction.
+- Added native cleanup tests and a manual pre-beta test sheet, separating automated
+  evidence from outstanding installation, listening and long-session validation.
+
 ## 0.24.0-alpha.1 — 2026-11-14 (public prerelease)
 
 Sixth public alpha, based on 0.24.0-dev. Includes every previously unpublished
