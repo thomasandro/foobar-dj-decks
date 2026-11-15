@@ -4,7 +4,7 @@
 #include <mutex>
 #include <cassert>
 #include <iostream>
-struct AutoDeck {bool loaded=true,helper=true,playing=false,eof=false;double length=100,framesPlayed=0;size_t pending=0;size_t pendingFrames(){return pending;}};
+struct AutoDeck {bool loaded=true,helper=true,playing=false,eof=false;double length=100,trimEnd=0,framesPlayed=0;size_t pending=0;size_t pendingFrames(){return pending;}};
 class CDjPanel {
 public:
     bool m_restoring=false,m_autoChanging=false,m_alternate=false,m_chain[2]={},m_autoArmed[2]={},m_altAvailable[2]={true,true};
@@ -18,6 +18,7 @@ public:
         ++loads[deck];m_autoArmed[deck]=false;m_deck[deck]=AutoDeck{};
         if(std::string(path)=="bad"){m_deck[deck].loaded=false;m_deck[deck].helper=false;m_error[deck]=L"Decode failure";}
     }
+    bool prepared[2]={true,true};bool NextPrepared(int deck){return prepared[deck];}
     void CancelAutomation();bool NextQueue(int,bool);void AutomationTick();
     void audio(size_t frames){
         if(m_autoFade.active&&m_deck[m_autoFade.to].playing){m_crossfade=(float)m_autoFade.advance(frames,true);if(m_autoFade.finished)m_deck[m_autoFade.from].playing=false;}

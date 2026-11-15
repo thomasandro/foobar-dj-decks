@@ -37,11 +37,14 @@ try {
     Add-File $zip (Join-Path $repo 'docs/SCROBBLING_REPLAYGAIN.md') 'SCROBBLING_REPLAYGAIN.md'
     Add-File $zip (Join-Path $repo 'docs/BETA_TEST_PLAN.fr.md') 'BETA_TEST_PLAN.fr.md'
     Add-File $zip (Join-Path $repo 'docs/BETA_RELEASE.fr.md') 'BETA_RELEASE.fr.md'
+    Add-File $zip (Join-Path $repo 'docs/HEADPHONE_CUE.md') 'HEADPHONE_CUE.md'
+    Add-File $zip (Join-Path $repo 'docs/PLAYLIST_PREVIEW.md') 'PLAYLIST_PREVIEW.md'
+    Add-File $zip (Join-Path $repo 'docs/SILENCE_TRIM.md') 'SILENCE_TRIM.md'
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repo 'stems') -File) { Add-File $zip $file.FullName ('stems/'+$file.Name) }
     Add-File $zip (Join-Path $repo 'docs\STEMS.md') 'stems/README.md'
     foreach ($name in @('LICENSE','THIRD_PARTY_NOTICES.md','README.md','README.fr.md','CHANGELOG.md')) { Add-File $zip (Join-Path $repo $name) $name }
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repo 'licenses') -File) { Add-File $zip $file.FullName ('licenses/'+$file.Name) }
-    Add-Text $zip 'SOURCE.txt' "Matching complete source: foo_dj-$version-source.zip. Distribute the matching source archive alongside this binary package. Build instructions and all non-system source/build inputs are included in that archive. This package is an x64 beta release. Stem separation remains experimental. x86 beta validation is pending."
+    Add-Text $zip 'SOURCE.txt' "Matching complete source: foo_dj-$version-source.zip. Distribute the matching source archive alongside this binary package. Build instructions and all non-system source/build inputs are included in that archive. Beta release. Stem separation remains experimental. Native x64/x86 tests pass; external x86 host feedback is requested."
 } finally { $zip.Dispose() }
 $zip = New-ZipFile $sourceZip
 try {

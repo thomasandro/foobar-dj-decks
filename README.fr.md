@@ -3,18 +3,22 @@
 [English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
-**0.28.0-beta.1 est la première bêta x64. Les stems restent expérimentaux.**
+**0.34.1-beta.1 : paquets bêta x64 et x86. Les stems restent expérimentaux.**
 
 Nouveautés : [cache des stems](docs/STEM_CACHE.md), [ReplayGain et scrobbling facultatif](docs/SCROBBLING_REPLAYGAIN.md), [formats de playlist et transferts A/B](docs/PLAYLISTS.md).
 
+Nouveautés depuis la dernière publication : [préécoute casque configurable](docs/HEADPHONE_CUE.md), [extraits de playlist et forme d’onde complète cliquable](docs/PLAYLIST_PREVIEW.md), [suppression optionnelle des silences et préchargement](docs/SILENCE_TRIM.md), déplacement multiple avec Maj et alternance AUTO préservée lors des déplacements dans le morceau.
+
 ## ⬇ Télécharger l’extension
 
-**[Télécharger DJ Decks 0.28.0-beta.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-0.28.0-beta.1-win-x64.fb2k-component)**
+**[Télécharger DJ Decks 0.34.1-beta.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.34.1-beta.1/foo_dj-0.34.1-beta.1-win-x64.fb2k-component)**
 
-Fichier installable `.fb2k-component` pour foobar2000 2.x x64.
+**[Télécharger en 32 bits (x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.34.1-beta.1/foo_dj-0.34.1-beta.1-win-x86.fb2k-component)**
+
+Fichier installable `.fb2k-component` pour foobar2000 2.x : x64 ou x86 selon votre installation.
 Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
 
-[Télécharger la bêta et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.28.0-beta.1)
+[Télécharger la bêta et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.34.1-beta.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
 
@@ -57,7 +61,7 @@ pour l’idée des playlists flottantes et ses retours sur l’interface et la l
 ## Moteur de stems facultatif — expérimental
 
 Le composant fonctionne sans Python. Pour les stems, installer Python 3.10–3.12,
-télécharger le [ZIP de l’installateur du moteur](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-stems-engine-0.28.0-beta.1.zip), le décompresser puis
+télécharger le [ZIP de l’installateur du moteur](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.34.1-beta.1/foo_dj-stems-engine-0.34.1-beta.1.zip), le décompresser puis
 lancer `./install-stems.ps1 -DownloadModel` dans PowerShell. Les dépendances et le
 modèle htdemucs sont téléchargés séparément. CUDA est choisi s’il est disponible,
 avec retour au CPU en cas d’échec. `-CPUOnly` installe uniquement le moteur CPU.
@@ -66,13 +70,13 @@ Le son reste local et les morceaux ne sont pas modifiés. [Installation et limit
 
 ## Installation
 
-Windows x64, foobar2000 2.x x64, Default User Interface. Les essais de développement
+Windows, foobar2000 2.x (architecture x64 ou x86 correspondante), Default User Interface. Les essais de développement
 ont été faits avec foobar2000 2.26.3 preview du 8 novembre 2026. Les autres versions
-2.x ne sont pas encore validées. Cette bêta est x64 uniquement ; une alpha x86 antérieure existe, en attente de retour pour la bêta. Aucune version ARM64/macOS ni intégration native
+2.x ne sont pas encore validées. Choisir le paquet correspondant à foobar (x64 ou x86). Les tests natifs passent sur les deux architectures ; les retours en conditions réelles sur x86 restent attendus. Aucune version ARM64/macOS ni intégration native
 Columns UI n’est fournie.
 
 Pour le premier essai, utiliser un profil portable séparé. Installer
-`foo_dj-0.28.0-beta.1-win-x64.fb2k-component` via
+`foo_dj-0.34.1-beta.1-win-x64.fb2k-component` via
 **Préférences → Composants → Installer…**, puis redémarrer. Dans l’édition de disposition
 de Default UI, ajouter **DJ Decks** (Utilitaires). Un grand panneau est préférable ;
 commencer vers 900 × 650 px. WebView2, SMP et Smooth Browser ne sont pas nécessaires. Le composant utilise
@@ -119,7 +123,7 @@ Un décalage de grille ne corrige ni un mauvais BPM ni les variations de tempo.
 ## Limites et données
 
 Les lenteurs observées préexistaient au travail sur le composant selon l’utilisateur ; elles ne constituent pas un blocage démontré propre à DJ Decks. Les retours de bêta restent bienvenus. La détection des battements peut refuser de vrais morceaux. Pas de
-préécoute casque, d’égaliseur, de limiteur, de boucles ou de suivi de synchronisation.
+égaliseur, de limiteur, de boucles ou de suivi de synchronisation.
 
 Les platines utilisent les décodeurs installés et la sortie configurée, mais suivent
 leur propre transport : ne pas supposer une intégration avec les DSP, scrobbles et

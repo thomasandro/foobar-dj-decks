@@ -25,6 +25,8 @@ int wmain(int argc,wchar_t** argv) {
             assert(L.queueOpen.bottom<L.wave.top);
             assert(L.analyse[0].bottom<L.queue[0].top);
             assert(L.release.right<L.automation.left);
+            assert(L.release.right<L.headphones.left&&L.headphones.right<L.automation.left);
+            assert(L.headphones.Width()>24&&L.headphones.Height()>=40);
             assert(L.automation.right<=L.deck.right);
             assert(L.queue[1].bottom<L.stemPrepare.top);
             assert(L.stemPrepare.right<L.stem[0].left);
@@ -93,6 +95,7 @@ int wmain(int argc,wchar_t** argv) {
         RECT metadata={L.deck.left+8,L.deck.top+7,L.deck.right-8,L.deck.top+117};dj_skin::surface(dc,metadata,RGB(50,60,68));
         for(int k=0;k<3;++k) {dj_skin::surface(dc,L.analyse[k],accent);dj_skin::icon(dc,L.analyse[k],k==0?dj_skin::Icon::pulse:k==1?dj_skin::Icon::keySearch:dj_skin::Icon::refresh);}
         dj_skin::surface(dc,L.release,accent);dj_skin::icon(dc,L.release,dj_skin::Icon::release);
+        dj_skin::surface(dc,L.headphones,accent);dj_skin::icon(dc,L.headphones,dj_skin::Icon::headphones);
         for(int k=0;k<4;++k) {dj_skin::surface(dc,L.gridControl[k],accent);dj_skin::icon(dc,L.gridControl[k],k==0?dj_skin::Icon::left:k==1?dj_skin::Icon::anchor:k==2?dj_skin::Icon::right:dj_skin::Icon::automatic);}
         for(auto r:{L.pitch[0],L.pitch[1],L.pitch[2],L.matchKey,L.key,L.beat,L.sync,L.range,L.btn[0],L.btn[1]})dj_skin::surface(dc,r,accent);
         dj_skin::icon(dc,L.matchKey,dj_skin::Icon::keyMatch);dj_skin::icon(dc,L.key,dj_skin::Icon::lock,accent);

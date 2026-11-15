@@ -1,11 +1,11 @@
-param([string]$VSWHERE = '')
+param([string]$VSWHERE = '', [ValidateSet('x64','x86')][string]$Architecture = 'x64')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $VSWHERE) { $VSWHERE = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe' }
 $vs = & $VSWHERE -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $vs) { throw 'C++ Visual Studio installation not found.' }
-$vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
-if (-not (Test-Path -LiteralPath $vcvars)) { throw 'vcvars64.bat not found.' }
+$vcvars = Join-Path $vs ("VC\Auxiliary\Build\vcvars" + $(if($Architecture -eq 'x86'){'32'}else{'64'}) + '.bat')
+if (-not (Test-Path -LiteralPath $vcvars)) { throw 'Requested Visual Studio toolchain not found.' }
 $output = Join-Path $repo 'build\tests'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $source = [IO.File]::ReadAllText((Join-Path $repo 'sdk\foobar2000\foo_dj\ui_element.cpp'))
@@ -46,6 +46,22 @@ $labelFirst=$source.IndexOf('std::wstring CDjPanel::QueueLabel(')
 $labelLast=$source.IndexOf('    void CDjPanel::UpdateQueue(', $labelFirst)
 if($labelFirst -lt 0 -or $labelLast -lt $labelFirst){throw 'Queue label extraction anchors changed'}
 [IO.File]::WriteAllText((Join-Path $output 'queue-label-generated.cpp'),'#include "../../tests/queue_label_fixture.h"'+"`n"+$source.Substring($labelFirst,$labelLast-$labelFirst)+"`n"+'#include "../../tests/queue_label_cases.inc"',[Text.UTF8Encoding]::new($false))
+$previewFirst=$source.IndexOf('    void CDjPanel::ScanPreviewOverview(')
+$previewLast=$source.IndexOf('    void CDjPanel::SilenceMenu(', $previewFirst)
+if($previewFirst -lt 0 -or $previewLast -lt $previewFirst){throw 'Preview extraction anchors changed'}
+[IO.File]::WriteAllText((Join-Path $output 'preview-generated.cpp'),'#include "../../tests/preview_fixture.h"'+"`n"+$source.Substring($previewFirst,$previewLast-$previewFirst)+"`n"+'#include "../../tests/preview_cases.inc"',[Text.UTF8Encoding]::new($false))
+$prepFirst=$source.IndexOf('    struct PreparedTrack{')
+$prepLast=$source.IndexOf('// Position de toutes les zones', $prepFirst)
+$membersFirst=$source.IndexOf('        struct PrepareRequest{')
+$membersLast=$source.IndexOf('        void PreparationTick();', $membersFirst)
+$loadFirst=$source.IndexOf('    void CDjPanel::LoadDeck(')
+$loadLast=$source.IndexOf('    void CDjPanel::CommitLoadDeck(', $loadFirst)
+if($prepFirst -lt 0 -or $prepLast -lt $prepFirst -or $membersLast -lt $membersFirst -or $loadLast -lt $loadFirst){throw 'Preparation extraction anchors changed'}
+[IO.File]::WriteAllText((Join-Path $output 'preparation-generated.cpp'),'#include "../../tests/preparation_fixture.h"'+"`n"+$source.Substring($prepFirst,$prepLast-$prepFirst)+"`n"+'#include "../../tests/preparation_panel_fixture.h"'+"`n"+$source.Substring($membersFirst,$membersLast-$membersFirst)+"`n};`n"+$source.Substring($loadFirst,$loadLast-$loadFirst)+"`n"+'#include "../../tests/preparation_cases.inc"',[Text.UTF8Encoding]::new($false))
+$seekFirst=$source.IndexOf('void CDjPanel::SeekDeck(')
+$seekLast=$source.IndexOf('void CDjPanel::EnsureEngine()', $seekFirst)
+if($seekFirst -lt 0 -or $seekLast -lt $seekFirst){throw 'Seek extraction anchors changed'}
+[IO.File]::WriteAllText((Join-Path $output 'seek-generated.cpp'),'#include "../../tests/seek_fixture.h"'+"`n"+$source.Substring($seekFirst,$seekLast-$seekFirst)+"`n"+'#include "../../tests/seek_cases.inc"',[Text.UTF8Encoding]::new($false))
 $prior = $env:DJ_DECKS_VCVARS
 try {
     $env:DJ_DECKS_VCVARS = $vcvars

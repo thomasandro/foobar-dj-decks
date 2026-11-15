@@ -1,12 +1,12 @@
 # Known issues and scope
 
-## Beta status — 0.28.0-beta.1 x64
+## Beta status — 0.34.1-beta.1 x64 / x86
 
 - User-confirmed: x64 installation, playback on real tracks, save/restore.
   The newly packaged beta was also installed with backup and confirmed working by the user.
 - Slow starts/closes predate this component work according to the user; no
   component-specific cause has been demonstrated, so this is not a beta blocker.
-- x86 beta validation awaits Fabcore's external feedback; this package is x64 only.
+- Both architectures compile and pass native tests. External x86 host feedback is still requested.
 - Stems remain experimental. Preparation time, separation artifacts and recovery
   from GPU/decoder errors depend on the machine and source material.
 - Additional profiles/devices, narrow panels/DPI, output reconfiguration and the
@@ -38,7 +38,7 @@
 
 ## Integration
 
-- Default UI element only; no native Columns UI panel, no headphone/cue routing.
+- Default UI element only; no native Columns UI panel. Separate stereo headphone cue is available (see HEADPHONE_CUE.md); wider real-device testing remains welcome. No custom multichannel cue matrix.
 - Separate output instance can contend with normal playback/exclusive outputs.
   The deck engine continues sending silence when idle after first start.
 - Standard playback callbacks, DSP chains, replaygain, main volume, scrobbling and

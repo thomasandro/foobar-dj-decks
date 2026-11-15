@@ -55,7 +55,7 @@ inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bo
     Gdiplus::Pen highlight(Gdiplus::Color(casing?180:105,255,255,255),1.f);
     g.DrawLine(&highlight,r.X+8,r.Y+3,r.GetRight()-8,r.Y+3);
 }
-enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release,settings };
+enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release,settings,headphones,stop };
 inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)) {
     const int width=rect.right-rect.left,height=rect.bottom-rect.top;
     if(width<8 || height<8) return;
@@ -86,6 +86,8 @@ inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)
         Gdiplus::RectF caption(0,15,24,9);g.DrawString(tempo?L"BPM":L"KEY",3,&font,caption,&format,&brush);return;
     }
     switch(kind) {
+    case Icon::stop:g.FillRectangle(&brush,6.f,6.f,12.f,12.f);break;
+    case Icon::headphones:g.DrawArc(&pen,4.f,3.f,16.f,17.f,180.f,180.f);g.FillRectangle(&brush,3.f,11.f,5.f,10.f);g.FillRectangle(&brush,16.f,11.f,5.f,10.f);break;
     case Icon::settings:{
         Gdiplus::GraphicsPath gear;
         for(int n=0;n<64;++n){float angle=(float)(n*6.283185307179586/64),radius=(n%8<4)?10.f:8.f;

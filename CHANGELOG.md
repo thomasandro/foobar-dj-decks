@@ -1,5 +1,190 @@
 # Changelog
 
+## 0.34.1-beta.1 — 2026-11-15
+
+Public beta for x64 and x86, with installable packages and a common complete source archive.
+Includes all previously unpublished changes from 0.28.0-beta.2 through 0.34.1-beta.1, detailed below: configurable headphone cue, playlist excerpt previews, clickable approximate whole-track waveforms, optional silence trimming/preload, multi-track Shift moves and AUTO seek correction. Stems remain experimental. x64 operation confirmed by the user; x86 compilation/native tests verified, broader host feedback requested.
+
+- Do not cancel A/B alternation when seeking within a deck or returning to start.
+  Previously SeekDeck called the generic CancelAutomation before positioning,
+  resetting the user's AUTO mode even on ordinary waveform clicks.
+- Preserve play/pause, playlist indices and preparation/arming state. During an
+  active crossfade, preserve direction/current gain and replan remaining time
+  using updated source positions, trimmed ends and speeds. Pending/empty deck
+  handling remains non-disruptive; seeking itself does not start paused decks.
+- Regression executes the actual SeekDeck method with mock readers. Reproduces
+  the previous mode reset, then checks ordinary/paused seeks, pending/empty decks,
+  queue preservation, trimmed start and continuous in-progress fade replanning.
+  Native tests run without foobar, personal music, screenshots or physical audio.
+
+
+## 0.34.0-beta.1 — local candidate, not published
+
+- Settings → Silence trimming / preload: independently enable leading/trailing
+  silence removal (both off initially). Default threshold -60 dBFS, selectable
+  presets -96…-30. Settings affect newly loaded tracks; source files/tags unchanged.
+- Scan decoded source samples across all channels, before gain/stems processing.
+  Preserve internal pauses and 20ms edge guards. Bound scanning to the first/last
+  60s; unknown duration, missing seek support or no detected sound preserve the
+  corresponding original edge, including entirely silent tracks.
+- Prepare enabled loads in a cancelable low-priority worker: decoder, trim bounds
+  and a bounded approximately 250ms source buffer. Adopt on the UI thread; preserve
+  queued Play/seek intent and restore pending targets paused across sessions.
+- AUTO warms the next item per active queue. Wait for preparation readiness and
+  use useful source end for speed-aware fades. Enforce trimmed tail in audio-frame
+  consumption, rebase source-position clocks on output-rate initialization, and
+  return to trimmed start for replay. This does not guarantee gapless transitions.
+- Stop/Release cancels and releases preloads and suspends their automatic reopening
+  until explicit playback/load/AUTO. Discard obsolete/end-of-list/manual-mode warm
+  readers. Disable analyser/stem actions during a pending track change so they do
+  not act on the previous file. Audio/stem rendering retains original time axes.
+- Tests cover actual detection, thresholds/channels, guarded edges/internal pauses,
+  silent/unsupported tracks, cancellation and speed-aware caps. Execute the actual
+  preparation scheduler/load wrapper and AUTO controller using mock decoders:
+  warm next, Play/seek intent, readiness gating, suspended release, normal/unknown
+  exceptions and disabled legacy loads. Full native/audio suite passed; no foobar,
+  user music or physical output opened. Live transition quality remains manual.
+- Bilingual guide: docs/SILENCE_TRIM.md. Not installed/published by packaging alone.
+
+
+## 0.33.0-beta.1 — local candidate, not published
+
+- Make the headphone overview waveform clickable. Map its plot area to full source
+  duration and restart the current file/subsong at that position, independently of
+  deck transports, loaded items, playlists, master audio and scrobbling.
+- Keep the selected 8/15-second length. The combined preset becomes one continuous
+  16-second excerpt after a click. Clamp near EOF without wrapping to the beginning;
+  seek failures follow the existing preview error/cleanup path.
+- Retain the window/overview on seek; immediately move the indicator and preserve
+  request generation fencing against stale audio/visual updates. Resume partial
+  overview sampling using the existing cache. Same cue endpoint flushes/reuses its
+  output instead of reopening it for every click, unless flushing fails.
+- Add a hand cursor over the plot and bilingual click hint. Ignore clicks in header,
+  margins and status text; closing/stopping and automatic completion still work.
+- Test plot bounds/callbacks with hidden windows, actual preview offsets/durations
+  with mock decoding, near-EOF clamping, retained visuals and stale generations,
+  plus same-endpoint reuse with mock audio output. No foobar, music file or real
+  output opened by the test harness. Live interaction/latency remain manual checks.
+
+
+## 0.32.0-beta.1 — local candidate, not published
+
+- Anchor the preview window beside the originating floating playlist, choosing
+  right/left/below/above according to monitor work area and clamping to the screen.
+  Reposition when switching playlist; keep the window nonactivating and draggable.
+- Plot the whole source track and its source-time playhead. Middle excerpts and
+  combined begin/middle previews retain their correct positions on this full axis.
+- Optional low-priority overview worker samples 32 distributed regions, with a
+  two-second budget checked between decoder calls. Audio does not wait for it;
+  partial results are shown progressively. This is approximate sampling, not a
+  full peak scan or a guaranteed deadline on an individual slow decoder/I/O call.
+- Keep up to eight in-memory overviews keyed by path/subsong/file size/mtime;
+  reuse complete results without reopening a sampling decoder and resume partial
+  results. Cancel sampling on replacement, stop, tag-writing handoff and teardown.
+- Preserve already published overview data when playback metadata arrives later;
+  fence all updates by request generation. Actual preview samples enrich the
+  whole-track view. UI storage/refresh remain bounded to 1024 bins / 20Hz.
+- Tests cover adjacent/work-area placement, full-axis/middle offsets, stale updates,
+  overview-before-metadata ordering, sampled coverage, decoder/cache reuse and
+  bounded cache eviction using hidden windows and mocked inputs only. Real-device
+  performance and perceived latency remain to be checked by the user.
+
+
+## 0.31.0-beta.1 — local candidate, not published
+
+- Add a small, owned, draggable headphone-preview waveform window matching the
+  source deck color. Open without stealing focus; reuse for a replacement excerpt.
+  Close on completion, stop, failure or panel teardown; its close button stops cue.
+- Build the excerpt waveform progressively from already decoded samples. No extra
+  decoder, full-file scan, cache or wait before playback. Bound storage to 1024 peak
+  bins and UI refresh to 20Hz. Future waveform bins remain blank until decoded.
+- Show the vertical playhead, excerpt elapsed/duration and source-track position;
+  concatenate beginning/middle sections in combined mode. Estimate playhead from
+  submitted frames minus cue queue/backend latency. Unreported Bluetooth/device
+  delay is not compensated and live perceived alignment remains unverified.
+- Fence visual updates by request generation; reset on replacement. Test bounded
+  peak extraction, offsets, invalid samples, latency/end bounds and stale updates.
+  Hidden native window tests exercise painting, dragging hit-test, close callback
+  and destruction; mock actual decoding confirms no additional decoder is opened.
+- No foobar access/capture, real output or personal music used by tests. Guide:
+  docs/PLAYLIST_PREVIEW.md. Live performance/listening confirmation remains manual.
+
+
+## 0.30.1-beta.1 — local candidate, not published
+
+- Increase playlist excerpts from 5/10 seconds to 8/15 seconds in all five modes,
+  including first 8 + middle 8. Keep the saved preset index, short-track clipping,
+  centered middle windows and overlap avoidance.
+- Show a solid Stop icon instead of headphones on the currently previewed playlist
+  entry. Clicking it stops the excerpt; headphones return after completion,
+  cancellation or failure through the existing active-row state.
+- Update French/English labels, usage guide and duration/offset regression tests.
+  Check active-row Stop rendering offscreen, without any foobar capture or access.
+
+
+## 0.30.0-beta.1 — local candidate, not published
+
+- Add a small headphone button before every row in both floating playlists. Listen
+  without loading/seeking a deck or modifying the master mix/list selection. A
+  second click stops that track; another row replaces the single shared preview.
+- Headphone settings: five saved excerpt presets shared by both lists: first 5/10 s,
+  centered middle 5/10 s, or first 5 + middle 5. Clamp short tracks and avoid overlap
+  in combined mode; require known duration and seek support for middle excerpts.
+- Separate original-file decoder, headphone volume and explicit selected endpoint.
+  Previews temporarily override deck cue, then restore it. No stems, deck processing,
+  ReplayGain or scrobbling for excerpts. Preserve subsongs; local files only.
+- Latest-request cancellation with a generation fence prevents stale audio entering
+  a newly configured cue route. Stop/release the reader before analysis tag-writing
+  handoff and during panel shutdown. Errors release the input and restore deck cue.
+- Native row-button tests preserve selection, suppress deck-loading on double-click
+  and cancel outside releases. Test the actual preview method with mock input/sink:
+  exact sample counts, centered offsets, stereo/fades, short tracks, cancellation,
+  missing output, stale generations, subsongs and decoder cleanup. Runner tests cover
+  replacement/errors/recovery. No real audio device, user music or foobar access.
+- Includes unpublished configurable headphone routing from 0.29 below and the
+  beta.2 multi-drag fix. Guide: docs/PLAYLIST_PREVIEW.md. Live listening still pending.
+
+
+## 0.29.0-beta.1 — local candidate, not published
+
+- Add a per-deck headphone icon and a Settings → Headphone cue menu. Enumerate
+  foobar output endpoints, persist the chosen backend/device and independent
+  0–100% cue volume (initially 25%). Cue switches reset off at panel startup.
+- Tap the same decoded frames before deck volume and crossfader, after tempo,
+  transposition, stems and optional ReplayGain. No additional decoder or transport;
+  cue-only listening does not earn scrobbles. Both cue decks are mixed at half gain.
+- Separate output worker, bounded 200ms queue, nonwaiting producer and streaming
+  sample-rate conversion for forced output rates. Overflow drops old cue audio;
+  it never back-pressures the master. No automatic clock/latency correction.
+- Reject the exact master endpoint pair; never fall back to the master on failure.
+  Show output errors in cue settings, allow retry/device change and explicit release.
+  Available endpoints depend on installed foobar outputs; no fixed hardware names.
+- First implementation uses a separate stereo output and the existing deck playhead;
+  no custom multichannel routing or independent paused-deck preview. Bluetooth may
+  add latency; acoustic beat alignment between separate devices is not guaranteed.
+- Mock-output tests exercise real cue worker/gains/resampler/queue: silent master
+  with audible cue, rate conversion across packet boundaries, bounded backlog,
+  stalls, absent/shared/broken endpoints, recovery and shutdown. No physical output
+  or foobar host is opened. Live compatibility and listening remain to be confirmed.
+- Includes the beta.2 Shift multi-drag fix below. See docs/HEADPHONE_CUE.md.
+
+
+## 0.28.0-beta.2 — local candidate, not published
+
+- Preserve the complete existing selection when Shift is held before starting a
+  drag on a selected playlist row. Previously the native listbox processed that
+  mouse-down as a selection edit before the drag payload was captured, potentially
+  leaving only one item to move. Copy drags and Shift pressed during a drag keep
+  their behavior; move/copy is still decided at release.
+- Defer native Shift-click selection until release when there was no drag, so
+  range selection remains available. Plain clicks still select a single row;
+  Ctrl-click selection remains native. Escape cancels without dropping entries.
+- Hidden-window regression reproduces the original selection loss and now passes
+  with contiguous/noncontiguous selections, Shift before/during drag, cancellation,
+  plain clicks and comparison with native Shift-click selection. No foobar host
+  is opened, captured or monitored. Real-host gesture confirmation remains manual.
+
+
 ## 0.28.0-beta.1 — 2026-11-15 (first public x64 beta)
 
 First x64 beta, including previously unpublished 0.25–0.27.3 changes detailed below.

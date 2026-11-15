@@ -47,3 +47,7 @@ Edit the bundled SoundTouch sources, rebuild with `scripts/build.ps1`, run the s
 then package again. All application source and necessary non-system build inputs
 are supplied, so no unpublished DJ Decks object files are required to relink.
 The Microsoft toolchain and foobar host remain external prerequisites.
+
+## 32-bit builds
+
+See [X86.md](X86.md). Use a separate source directory and `scripts/build-x86.ps1`.

@@ -12,6 +12,8 @@ public:
     std::function<bool(IDataObject*)> accepts;
     std::function<void(IDataObject*,size_t)> dropped;
     std::function<void(int,std::vector<size_t>,size_t)> action;
+    std::function<void(size_t)> preview;
+    int previewActive=-1;
     std::function<bool(DjQueueWindow*,const std::vector<size_t>&,size_t,bool)> received;
     static inline std::vector<DjQueueWindow*> windows;
     static DjQueueWindow* containing(HWND target){for(auto w:windows)if(w->list==target)return w;return nullptr;}
@@ -121,7 +123,10 @@ private:
             int length=(int)::SendMessage(list,LB_GETTEXTLEN,item->itemID,0);if(length<0)return TRUE;
             std::wstring text(length+1,L'\0');::SendMessageW(list,LB_GETTEXT,item->itemID,(LPARAM)text.data());
             auto old=::SelectObject(dc,font);::SetBkMode(dc,TRANSPARENT);::SetTextColor(dc,selected?RGB(244,248,252):RGB(208,218,231));
-            r.left+=10;r.right-=8;::DrawTextW(dc,text.c_str(),length,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+            CRect cue(r.left+5,r.top+2,r.left+31,r.bottom-2);
+            dj_skin::surface(dc,cue,accent(),false,previewHot==(int)item->itemID,previewPressed==(int)item->itemID||previewActive==(int)item->itemID);
+            dj_skin::icon(dc,cue,previewActive==(int)item->itemID?dj_skin::Icon::stop:dj_skin::Icon::headphones,previewActive==(int)item->itemID?accent():RGB(208,218,231));
+            r.left+=38;r.right-=8;::DrawTextW(dc,text.c_str(),length,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
             ::SelectObject(dc,old);if(item->itemState&ODS_FOCUS)::DrawFocusRect(dc,&item->rcItem);return TRUE;
         }
         if(item->CtlType==ODT_BUTTON){
@@ -141,6 +146,8 @@ private:
         handled=FALSE;return 0;
     }
     CPoint start;bool dragging=false,preserveSelection=false;
+    int previewHot=-1,previewPressed=-1;
+    WPARAM deferredSelectionKeys=0;
     std::vector<size_t> dragSelection;
     class Target : public IDropTarget {
     public:
@@ -174,13 +181,33 @@ private:
     }
     static LRESULT CALLBACK ListProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data) {
         auto self=(DjQueueWindow*)data;
+        if(msg==WM_MOUSEMOVE&&!(w&MK_LBUTTON)){
+            DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);int hot=GET_X_LPARAM(l)>=5&&GET_X_LPARAM(l)<31&&!HIWORD(hit)?LOWORD(hit):-1;
+            if(hot!=self->previewHot){self->previewHot=hot;::InvalidateRect(h,nullptr,FALSE);TRACKMOUSEEVENT track={sizeof(track),TME_LEAVE,h,0};::TrackMouseEvent(&track);}
+        }
+        if(msg==WM_MOUSELEAVE){self->previewHot=-1;::InvalidateRect(h,nullptr,FALSE);}
+        if((msg==WM_LBUTTONDOWN||msg==WM_LBUTTONDBLCLK)&&GET_X_LPARAM(l)>=5&&GET_X_LPARAM(l)<31){
+            DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);if(!HIWORD(hit)&&LOWORD(hit)<::SendMessage(h,LB_GETCOUNT,0,0)){
+                self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();
+                self->previewPressed=LOWORD(hit);::SetFocus(h);::SetCapture(h);::InvalidateRect(h,nullptr,FALSE);return 0;}
+        }
+        if(msg==WM_LBUTTONUP&&self->previewPressed>=0){
+            int pressed=self->previewPressed;self->previewPressed=-1;DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
+            if(::GetCapture()==h)::ReleaseCapture();::InvalidateRect(h,nullptr,FALSE);
+            if(!HIWORD(hit)&&LOWORD(hit)==pressed&&GET_X_LPARAM(l)>=5&&GET_X_LPARAM(l)<31&&self->preview)self->preview(pressed);return 0;
+        }
+        if(msg==WM_CAPTURECHANGED||msg==WM_CANCELMODE||(msg==WM_KEYDOWN&&w==VK_ESCAPE))self->previewPressed=-1;
         if((msg==WM_KEYDOWN&&w==VK_ESCAPE)||msg==WM_CANCELMODE){self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();if(::GetCapture()==h)::ReleaseCapture();return 0;}
         if(msg==WM_KEYDOWN && w==VK_DELETE){if(self->action)self->action(1,self->selected(),0);return 0;}
         if(msg==WM_KEYDOWN && w==VK_RETURN){if(self->action)self->action(0,self->selected(),0);return 0;}
         if(msg==WM_LBUTTONDOWN){
             self->start=CPoint(GET_X_LPARAM(l),GET_Y_LPARAM(l));
             DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
-            self->preserveSelection=!(w&(MK_CONTROL|MK_SHIFT))&&!HIWORD(hit)&&::SendMessage(h,LB_GETSEL,LOWORD(hit),0)>0;
+            // Shift selects a range on a click, but means "move" on a drag.
+            // Defer native selection changes on an already selected row until
+            // mouse-up proves this is a click, preserving the complete payload.
+            self->preserveSelection=!(w&MK_CONTROL)&&!HIWORD(hit)&&::SendMessage(h,LB_GETSEL,LOWORD(hit),0)>0;
+            self->deferredSelectionKeys=w;
             LRESULT result=0;
             if(self->preserveSelection){::SetFocus(h);::SetCapture(h);}
             else result=DefSubclassProc(h,msg,w,l);
@@ -201,7 +228,12 @@ private:
             DefSubclassProc(h,msg,w,l);if(::GetCapture()==h)::ReleaseCapture();self->finishDrag(target,local,sel,(w&MK_SHIFT)!=0);return 0;
         }
         if(msg==WM_LBUTTONUP && self->preserveSelection){
-            self->preserveSelection=false;::ReleaseCapture();DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
+            self->preserveSelection=false;self->dragSelection.clear();::ReleaseCapture();
+            if(self->deferredSelectionKeys&MK_SHIFT){
+                DefSubclassProc(h,WM_LBUTTONDOWN,self->deferredSelectionKeys,MAKELPARAM(self->start.x,self->start.y));
+                return DefSubclassProc(h,msg,w,l);
+            }
+            DWORD hit=(DWORD)::SendMessage(h,LB_ITEMFROMPOINT,0,l);
             if(!HIWORD(hit)){::SendMessage(h,LB_SETSEL,FALSE,-1);::SendMessage(h,LB_SETSEL,TRUE,LOWORD(hit));}return 0;
         }
         if(msg==WM_CAPTURECHANGED){self->dragging=false;self->dragSelection.clear();}

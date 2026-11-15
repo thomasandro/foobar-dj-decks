@@ -20,3 +20,7 @@ Fifth alpha: v0.20.0-alpha.1, authorized on 2026-11-14 with the new user-supplie
 Sixth alpha: v0.24.0-alpha.1, authorized on 2026-11-14, with user-supplied stems screenshot and StyxCrosser credit.
 
 First x64 beta: v0.28.0-beta.1, publication authorized on 2026-11-15 after successful user installation. Stems remain experimental; x86 beta awaits external feedback.
+
+## 0.34.1-beta.1
+
+Publication of x64/x86 packages, common matching sources, detailed changelog and Hydrogenaudio announcement explicitly authorized by the user on 2026-11-15. No foobar access, capture or monitoring.

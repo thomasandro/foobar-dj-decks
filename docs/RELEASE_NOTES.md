@@ -1,38 +1,20 @@
-# DJ Decks 0.28.0-beta.1 — first x64 beta
+# DJ Decks 0.34.1-beta.1 — 2026-11-15
 
-New since the public 0.24.0-alpha.1 release:
+Beta packages for foobar2000 2.x Default UI, in x64 and x86. Choose the architecture of foobar, even on 64-bit Windows. Both packages share the complete matching source archive and detailed changelog.
 
-- Stem cache manager: occupied size and safe cleanup of unused entries, preserving
-  active stems, preparations, models and source music.
-- Optional ReplayGain (Off / Track / Album) and optional foo_scrobble 1.6.x adapter,
-  disabled by default. Wider real-world scrobbling feedback is welcome.
-- Custom foobar-style playlist formatting, four presets and optional position
-  numbers. Correct default: `%artist% - %title% '('%length%')'`.
-- Drag between floating playlists: copy, or Shift to move. Preserve order,
-  duplicates, subsongs and the currently playing item.
-- Retained queue metadata, asynchronous metadata reload and duration-hook fixes.
+Since the previous public 0.28.0-beta.1:
 
-On upgrade, select Settings → Playlist display → Artist - Title (duration) again
-if an older saved format lacks the quoted parentheses. Custom formats are preserved.
+- Configurable separate stereo headphone output and cue volume, with per-deck Cue A/B.
+- Independent playlist excerpt previews: 8 or 15 seconds from the start/middle, or 8+8 seconds. Click the active Stop icon to stop.
+- Floating approximate whole-track preview waveform near the playlist; click to preview another position. A click in combined mode plays 16 continuous seconds.
+- Optional leading/trailing silence trimming and asynchronous preparation/preload for AUTO. Both options default off; default threshold -60 dBFS, adjustable. Settings apply to newly loaded tracks; source files are unchanged.
+- Multi-track Shift drag-and-drop moves preserve the full selection.
+- Seeking or returning to start preserves AUTO alternation; active fades retain their direction and current gain.
 
-**Stems remain experimental.** Separation needs preparation before playback,
-with optional NVIDIA CUDA and CPU fallback; it is not real-time separation.
-Preparation time and audio artifacts depend on the machine and material.
+## Validation and limits
 
-The user confirms x64 installation, real-track playback and save/restore, plus
-successful operation after installing the packaged beta. Native tests pass.
-The x86 beta still awaits Fabcore's feedback; this release is x64 only.
+User-confirmed x64 operation. Both architectures compile and pass native automated tests, without opening or monitoring foobar. x86 real-host feedback is still requested. Stems remain experimental; the optional Python engine is a separate installation (64-bit Windows required for the supported engine).
 
-## Downloads
+Bluetooth cue latency is device-dependent. Cue is a separate stereo output, not a custom multichannel/ASIO matrix. Cue A/B follows deck transport; playlist excerpts are independent. Whole-track preview waveforms are sampled approximations. Silence detection examines at most the first/last 60 seconds and keeps original edges when a safe result is unavailable; it is not a gapless guarantee. No limiter is included.
 
-- [Installable x64 component](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-0.28.0-beta.1-win-x64.fb2k-component)
-- [Matching complete source](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-0.28.0-beta.1-source.zip)
-- [Optional stems installer](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.28.0-beta.1/foo_dj-stems-engine-0.28.0-beta.1.zip)
-- SHA256SUMS.txt attached to this release.
-
-The engine installer downloads Python dependencies and the model separately.
-The component works without it. Full development history, including unpublished
-0.25–0.27.3 milestones, is in [CHANGELOG.md](https://github.com/thomasandro/foobar-dj-decks/blob/v0.28.0-beta.1/CHANGELOG.md).
-
-Thanks to StyxCrosser for the continued testing and feedback, and Fabcore for
-helping with x86 testing!
+See CHANGELOG.md for every intermediate version and docs/HEADPHONE_CUE.md, PLAYLIST_PREVIEW.md, SILENCE_TRIM.md and KNOWN_ISSUES.md for details.

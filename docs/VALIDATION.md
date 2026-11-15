@@ -1,9 +1,9 @@
-# Current validation — 0.28.0-beta.1
+# Current validation — 0.34.1-beta.1
 
 User-confirmed: x64 installation, real-track playback, save/restore, and successful
 operation after installing this beta package with backup. Native automated tests
 pass; no foobar host was launched, captured or monitored by release checks.
-Stems remain experimental. x86 beta awaits Fabcore's feedback.
+Stems remain experimental. Both x64 and x86 builds and native regression suites pass. External x86 host testing is still requested. The release process does not access foobar.
 The corrected quoted playlist format was verified by the user in foobar; the mock
 formatter test validates callback/Unicode handling, not foobar's script parser.
 

@@ -18,6 +18,7 @@ using namespace ATL;
 using namespace WTL;
 CAppModule _Module;
 #include "../sdk/foobar2000/foo_dj/queue_window.h"
+#include "../sdk/foobar2000/foo_dj/preview_window.h"
 #pragma comment(lib,"user32.lib")
 #pragma comment(lib,"gdi32.lib")
 #pragma comment(lib,"ole32.lib")
@@ -46,6 +47,9 @@ int main(){
     HDC dc=CreateCompatibleDC(nullptr);HBITMAP bitmap=CreateBitmap(320,80,1,32,nullptr);auto prior=SelectObject(dc,bitmap);
     DRAWITEMSTRUCT draw={};draw.CtlType=ODT_LISTBOX;draw.itemID=0;draw.hwndItem=a.list;draw.hDC=dc;draw.rcItem={0,0,300,28};draw.itemState=ODS_SELECTED;
     SendMessage(a.m_hWnd,WM_DRAWITEM,100,(LPARAM)&draw);assert(GetPixel(dc,1,12)==RGB(0,194,211));
+    a.previewActive=0;SendMessage(a.m_hWnd,WM_DRAWITEM,100,(LPARAM)&draw);
+    assert(GetPixel(dc,18,14)==RGB(0,194,211)); // active row renders a solid stop square
+    a.previewActive=-1;
     b.deckIndex=1;draw.hwndItem=b.list;SendMessage(b.m_hWnd,WM_DRAWITEM,100,(LPARAM)&draw);assert(GetPixel(dc,1,12)==RGB(245,143,27));
     draw.itemState=0;draw.hwndItem=a.list;SendMessage(a.m_hWnd,WM_DRAWITEM,100,(LPARAM)&draw);assert(GetPixel(dc,1,12)==RGB(16,21,28));
     draw.CtlType=ODT_BUTTON;draw.CtlID=101;draw.hwndItem=GetDlgItem(a.m_hWnd,101);draw.rcItem={0,0,106,36};
@@ -54,16 +58,58 @@ int main(){
     SelectObject(dc,prior);DeleteObject(bitmap);DeleteDC(dc);
     int called=-1;std::vector<size_t> selection;
     a.action=[&](int command,std::vector<size_t> s,size_t){called=command;selection=s;};
+    int previewed=-1;a.preview=[&](size_t row){previewed=(int)row;};
+    RECT cueRow;SendMessage(a.list,LB_GETITEMRECT,2,(LPARAM)&cueRow);int cy=(cueRow.top+cueRow.bottom)/2;
+    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(12,cy));SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(12,cy));
+    assert(previewed==2&&called==-1&&(a.selected()==std::vector<size_t>{1,2}));
+    previewed=-1;SendMessage(a.list,WM_LBUTTONDBLCLK,MK_LBUTTON,MAKELPARAM(12,cy));SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(12,cy));
+    assert(previewed==2&&called==-1);
+    previewed=-1;SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(12,cy));SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(42,cy));assert(previewed==-1);
     SendMessage(a.list,WM_KEYDOWN,VK_DELETE,0);assert(called==1&&selection.size()==2);
     SendMessage(a.list,WM_KEYDOWN,VK_RETURN,0);assert(called==0);
     SendMessage(a.m_hWnd,WM_COMMAND,MAKEWPARAM(100,LBN_DBLCLK),(LPARAM)a.list);assert(called==0);
     SendMessage(a.m_hWnd,WM_COMMAND,MAKEWPARAM(103,BN_CLICKED),0);assert(called==2);
     SendMessage(a.m_hWnd,WM_COMMAND,MAKEWPARAM(104,BN_CLICKED),0);assert(called==3);
+    // Shift held before mouse-down must not let the native list change the payload.
+    // Cover contiguous and noncontiguous selections and either Shift timing.
+    for(const auto& wanted:std::vector<std::vector<size_t>>{{1,2},{0,2,3}}){
+        for(bool shiftAtStart:{false,true}){
+            a.refresh({L"one",L"two",L"three",L"four"},wanted);
+            RECT selectedRow;SendMessage(a.list,LB_GETITEMRECT,wanted.back(),(LPARAM)&selectedRow);
+            int sy=(selectedRow.top+selectedRow.bottom)/2;
+            SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON|(shiftAtStart?MK_SHIFT:0),MAKELPARAM(42,sy));
+            assert(a.selected()==wanted);
+            SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON|MK_SHIFT,MAKELPARAM(42,sy+40));
+            assert(a.selected()==wanted);
+            SendMessage(a.list,WM_KEYDOWN,VK_ESCAPE,0);
+            assert(a.selected()==wanted);
+        }
+    }
+    // A plain click still collapses to one row; Shift-click keeps the native
+    // extended-selection behavior, measured against an unsubclassed listbox.
+    HWND native=CreateWindowExW(0,L"LISTBOX",L"",WS_CHILD|LBS_EXTENDEDSEL,0,0,300,200,a.m_hWnd,nullptr,GetModuleHandle(nullptr),nullptr);
+    assert(native);
+    for(auto label:{L"one",L"two",L"three",L"four"})SendMessage(native,LB_ADDSTRING,0,(LPARAM)label);
+    a.refresh({L"one",L"two",L"three",L"four"},{1,2});
+    SendMessage(native,LB_SETSEL,TRUE,1);SendMessage(native,LB_SETSEL,TRUE,2);
+    SendMessage(a.list,LB_SETANCHORINDEX,0,0);SendMessage(native,LB_SETANCHORINDEX,0,0);
+    RECT ar,nr;SendMessage(a.list,LB_GETITEMRECT,2,(LPARAM)&ar);SendMessage(native,LB_GETITEMRECT,2,(LPARAM)&nr);
+    LPARAM ap=MAKELPARAM(42,(ar.top+ar.bottom)/2),np=MAKELPARAM(42,(nr.top+nr.bottom)/2);
+    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON|MK_SHIFT,ap);
+    SendMessage(a.list,WM_LBUTTONUP,MK_SHIFT,ap);
+    SendMessage(native,WM_LBUTTONDOWN,MK_LBUTTON|MK_SHIFT,np);
+    SendMessage(native,WM_LBUTTONUP,MK_SHIFT,np);
+    for(int i=0;i<4;++i)assert(SendMessage(a.list,LB_GETSEL,i,0)==SendMessage(native,LB_GETSEL,i,0));
+    DestroyWindow(native);
+    a.refresh({L"one",L"two",L"three",L"four"},{1,2});
+    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,ap);SendMessage(a.list,WM_LBUTTONUP,0,ap);
+    assert((a.selected()==std::vector<size_t>{2}));
+    a.refresh({L"Title — artist",L"école",L"duplicate",L"duplicate"},{1,2});
     // Native subclass keeps a multi-selection during a drag of an already selected row.
     RECT row;SendMessage(a.list,LB_GETITEMRECT,1,(LPARAM)&row);int y=(row.top+row.bottom)/2;
-    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(10,y));
-    SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(10,y+50));
-    SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(10,y+50));
+    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(42,y));
+    SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(42,y+50));
+    SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(42,y+50));
     // Hidden windows cannot be hit by WindowFromPoint; exercise the same drop
     // dispatcher with an explicit destination, without showing/capturing a host.
     assert(a.finishDrag(a.list,{10,y+50},{1,2},false));assert(called==4&&selection.size()==2);
@@ -72,11 +118,25 @@ int main(){
     assert(a.finishDrag(b.list,{10,0},{1,2},false));assert(source==&a&&selection.size()==2&&!moved&&boundary==0);
     assert(a.finishDrag(b.list,{10,1000},{1,2},true));assert(moved&&boundary==1);
     assert(!a.finishDrag(nullptr,{0,0},{1,2},false));
-    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(10,y));SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(10,y+50));
-    called=-1;SendMessage(a.list,WM_KEYDOWN,VK_ESCAPE,0);SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(10,y+50));assert(called==-1);called=4;
+    SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(42,y));SendMessage(a.list,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(42,y+50));
+    called=-1;SendMessage(a.list,WM_KEYDOWN,VK_ESCAPE,0);SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(42,y+50));assert(called==-1);called=4;
     SendMessage(a.m_hWnd,WM_COMMAND,MAKEWPARAM(105,BN_CLICKED),(LPARAM)GetDlgItem(a.m_hWnd,105));
     assert(a.IsWindow()&&!a.IsWindowVisible()&&SendMessage(a.list,LB_GETCOUNT,0,0)==4&&called==4);
     SendMessage(a.m_hWnd,WM_CLOSE,0,0);assert(a.IsWindow()&&!a.IsWindowVisible());
     auto oldList=a.list;a.DestroyWindow();b.DestroyWindow();assert(!a.list&&!b.list&&DjQueueWindow::containing(oldList)==nullptr);
-    _Module.Term();OleUninitialize();std::cout<<"Hidden queue windows: independent lists, commands, drag selection and clean teardown passed\n";
+    DjPreviewWindow preview;CRect previewRect(0,0,520,190);
+    auto adjacent=DjPreviewWindow::nearPlaylist(CRect(100,100,660,500),CRect(0,0,1920,1080));assert(adjacent.left==668&&adjacent.top==100);
+    adjacent=DjPreviewWindow::nearPlaylist(CRect(1300,100,1860,500),CRect(0,0,1920,1080));assert(adjacent.right==1292);
+    adjacent=DjPreviewWindow::nearPlaylist(CRect(0,0,560,500),CRect(0,0,800,600));assert(adjacent.left>=0&&adjacent.right<=800&&adjacent.top>=0&&adjacent.bottom<=600);
+    assert(preview.Create(nullptr,previewRect,L"Hidden preview test",WS_POPUP,WS_EX_TOOLWINDOW)!=nullptr);
+    assert(!preview.IsWindowVisible());dj_preview::VisualState visual;visual.duration=8;visual.position=2;visual.known[0]=true;visual.peaks[0]=.5f;
+    visual.trackDuration=100;preview.update(visual);SendMessage(preview.m_hWnd,WM_PAINT,0,0);
+    double requested=-1;preview.seeked=[&](double seconds){requested=seconds;};
+    CRect pc(0,0,520,190);auto plot=DjPreviewWindow::plotRect(pc);
+    SendMessage(preview.m_hWnd,WM_LBUTTONDOWN,0,MAKELPARAM(plot.left,80));assert(requested==0);
+    SendMessage(preview.m_hWnd,WM_LBUTTONDOWN,0,MAKELPARAM(plot.right-1,80));assert(requested==100);
+    requested=-1;SendMessage(preview.m_hWnd,WM_LBUTTONDOWN,0,MAKELPARAM(1,80));assert(requested==-1);
+    RECT pr;preview.GetWindowRect(&pr);assert(SendMessage(preview.m_hWnd,WM_NCHITTEST,0,MAKELPARAM(pr.left+80,pr.top+20))==HTCAPTION);
+    bool stopped=false;preview.stopped=[&]{stopped=true;preview.close();};SendMessage(preview.m_hWnd,WM_CLOSE,0,0);assert(stopped&&!preview.IsWindow());
+    _Module.Term();OleUninitialize();std::cout<<"Hidden queue/preview windows: independent lists, commands, drag selection, waveform window lifecycle and clean teardown passed\n";
 }

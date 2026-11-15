@@ -3,6 +3,20 @@
 Experimental public alpha; installation is manual. Use the new black
 **AUTO** button on each deck to open the settings menu (French/English).
 
+## Positionnement pendant AUTO / Seeking during AUTO (0.34.1-beta.1)
+
+Cliquer dans un morceau ou revenir à son début conserve désormais le mode AUTO
+choisi, les états lecture/pause et l’ordre des playlists. L’alternance A/B n’est
+plus désactivée par ce positionnement. Si un fondu est en cours, il garde sa
+direction et la position actuelle du crossfader ; sa durée restante est recalculée
+selon les nouvelles positions, les fins utiles et les vitesses des deux decks.
+Un saut près de la fin peut donc raccourcir le fondu. Un deck en pause reste en pause.
+
+Seeking within a deck, including return to start, preserves the selected AUTO
+mode, playback states and queue positions. During a live crossfade, keep its
+direction/current fader gain and replan its remaining duration from the updated
+source positions, useful ends and speeds. A paused deck is not started by seeking.
+
 ## Independent playlists
 
 Choose **Enchaîner cette liste / Auto-next on this deck**, then start that deck.
