@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.40.0-beta.1 — 2026-11-16 (x64 / x86)
+
+Public beta with both architectures, installable packages, complete matching sources and SHA-256 checksums. Includes the previously unpublished 0.39.0 limiter, detailed below. The user confirmed the installed x64 version working. Both native suites are verified for release; external x86 host feedback remains welcome. Smart Tempo compatibility is verified by its public command GUID and mock-service dispatch; actual analysis/tag writing with an installed version still needs separate verification.
+
+- Escape hides either floating playlist, including when a button has focus; during a drag/selection gesture it cancels the gesture first. Existing lists and deck playback are retained.
+- Added themed Empty list / Vider la liste button. Confirmation precedes clearing the whole chosen queue, even with no selection. Music files and loaded audio are retained; this deck's AUTO/preload and owned preview stop, A/B alternation stops, the other queue is preserved, and the empty queue is saved.
+- Settings → Audio: BPM analyser Auto / foo_smart_tempo / foo_bpm. Auto prefers the registered Smart Tempo analysis command, falling back to foo_bpm only if Smart Tempo is unavailable. Explicit selection fails visibly rather than switching silently.
+- Smart Tempo dispatch uses its public analysis GUID, preserving track subsong and the existing file-release-before-analysis workflow. Optional external component; no analyser code/binary is bundled. Save/validate BPM in the external UI then Refresh tags and manually resume the deck. Key analysis remains foo_musical_key.
+- Includes the previously unpublished 0.39.0 limiter. User-confirmed x64 operation; actual Smart Tempo execution/tag writing is not independently established by the native regression suite.
+
+
+## 0.39.0-beta.1 — previously unpublished development milestone
+
+- Master sample-peak limiter after crossfader, deck volumes, ReplayGain and original/stem mixing; enabled by default at -1 dBFS. Settings → Audio: bypass and -0.3 / -1 / -3 / -6 dBFS ceilings, saved in the profile.
+- Stereo-linked instantaneous attack with 80 ms exponential release, no added lookahead latency, no allocation or locking in the sample loop. The headphone Cue/playlist-preview path is unchanged.
+- Compact master indicator beside the crossfader: output peak bar, green LIM ready, amber gain reduction in dB held 350 ms, grey bypass, red CLIP held one second for pre-output sample overload with bypass or invalid samples. Invalid samples are sanitized in either mode.
+- This limits sample peaks, not intersample/true peaks, headphone output or downstream device processing. It is not an automatic loudness normalizer. This historical development milestone was included in 0.40.0; see current validation above.
+
+
 ## 0.38.1-beta.1 — 2026-11-15 (x64 / x86)
 
 Public beta with both architectures, installable packages, complete matching sources and SHA-256 checksums. Includes the previously unpublished 0.38.0 changes below. The user confirmed active-playlist distribution and Ctrl+A in x64. Both native suites are checked for release; x86 real-host feedback remains welcome. New user-supplied screenshot in both READMEs.

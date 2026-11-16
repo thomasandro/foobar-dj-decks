@@ -106,3 +106,7 @@ sélection teintée comme les decks. Le titre et la croix sont intégrés au ban
 Settings → Playlists → Distribute active foobar playlist alternates the entire playlist into A (1,3,5…) and B (2,4,6…). Confirmation precedes replacement of both lists; a recovery snapshot is required. Source playlist, duplicates and subsongs are preserved. Loaded decks keep playing, but AUTO and previews stop. Nothing starts automatically. Restore via Settings → Playlists → Restore before the last import or distribution (one shared recovery snapshot).
 
 Ctrl+A selects every row of the focused floating deck playlist. Use Shift-drag to move selected entries to the other deck; plain drag copies them.
+
+## Quick window/queue actions (0.40)
+
+Escape hides the focused playlist window; when dragging it first cancels that gesture. Empty list clears the whole chosen queue after confirmation, without deleting music or unloading the deck. It stops that deck's AUTO/preload and preview, and A/B alternation; it preserves the other queue. The empty queue is saved. There is no dedicated undo for clear: export a session first if you need to retain the list.

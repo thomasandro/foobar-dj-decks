@@ -13,6 +13,7 @@
 #include <string>
 #include <algorithm>
 #include <cassert>
+#include "../sdk/foobar2000/foo_dj/bpm_provider.h"
 #include <iostream>
 using namespace ATL;
 using namespace WTL;
@@ -24,6 +25,8 @@ CAppModule _Module;
 #pragma comment(lib,"ole32.lib")
 #pragma comment(lib,"comctl32.lib")
 int main(){
+    for(bool smart:{false,true})for(bool classic:{false,true}){assert(dj_bpm::select(0,smart,classic)==(smart?1:classic?2:-1));assert(dj_bpm::select(1,smart,classic)==(smart?1:-1));assert(dj_bpm::select(2,smart,classic)==(classic?2:-1));}
+
     assert(SUCCEEDED(OleInitialize(nullptr)));_Module.Init(nullptr,GetModuleHandle(nullptr));
     INITCOMMONCONTROLSEX controls={sizeof(controls),ICC_STANDARD_CLASSES};InitCommonControlsEx(&controls);
     DjQueueWindow a,b;CRect rect(0,0,560,400);
@@ -65,6 +68,10 @@ int main(){
     SelectObject(dc,prior);DeleteObject(bitmap);DeleteDC(dc);
     int called=-1;std::vector<size_t> selection;
     a.action=[&](int command,std::vector<size_t> s,size_t){called=command;selection=s;};
+    SendMessage(a.m_hWnd,WM_COMMAND,MAKEWPARAM(106,BN_CLICKED),0);assert(called==5&&selection.empty());called=-1;
+    // Escape leaves the model/window alive and preserves rows, regardless of focus.
+    SendMessage(a.list,WM_KEYDOWN,VK_ESCAPE,0);assert(IsWindow(a.m_hWnd)&&SendMessage(a.list,LB_GETCOUNT,0,0)==4);
+    SendMessage(GetDlgItem(b.m_hWnd,106),WM_KEYDOWN,VK_ESCAPE,0);assert(IsWindow(b.m_hWnd)&&SendMessage(b.list,LB_GETCOUNT,0,0)==1);
     int previewed=-1;a.preview=[&](size_t row){previewed=(int)row;};
     RECT cueRow;SendMessage(a.list,LB_GETITEMRECT,2,(LPARAM)&cueRow);int cy=(cueRow.top+cueRow.bottom)/2;
     SendMessage(a.list,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(12,cy));SendMessage(a.list,WM_LBUTTONUP,0,MAKELPARAM(12,cy));

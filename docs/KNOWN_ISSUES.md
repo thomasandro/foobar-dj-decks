@@ -1,3 +1,11 @@
+# Current additions — 0.40.0-beta.1
+
+- A master sample-peak limiter is now available and enabled by default (-1 dBFS); it does not cover headphone cue, intersample peaks or processing after DJ Decks.
+- Optional Smart Tempo integration depends on the upstream registered command GUID; actual execution/tag writing with installed releases remains to be checked. Keep the BPM output tag.
+- Empty list has confirmation but no dedicated undo; save a session first to retain the queue.
+
+Earlier limitations below remain applicable except where superseded above.
+
 # Known issues and scope
 
 ## A/B loops and Q
@@ -24,7 +32,7 @@ Points persist per track/subsong; enabling Q aligns them to displayed grid lines
 
 ## Audio and synchronization
 
-- No limiter. Correlated full-scale decks can exceed 0 dBFS at the crossfader centre.
+- Master sample-peak limiter defaults to -1 dBFS. With it bypassed, correlated full-scale decks can exceed 0 dBFS at the crossfader centre. Headphones and downstream/intersample peaks are not covered.
 - Linear source sample-rate conversion. SoundTouch supplies tempo/rate processing;
   key lock can produce audible artifacts and adds processing latency.
 - Seek/phase SYNC is not sample-accurate; SoundTouch, decoding and output buffering

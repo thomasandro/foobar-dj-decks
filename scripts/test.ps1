@@ -77,6 +77,7 @@ try {
 & (Join-Path $PSScriptRoot 'test-settings.ps1') -Architecture $Architecture
 & (Join-Path $PSScriptRoot 'test-tooltips.ps1') -Architecture $Architecture
 & (Join-Path $PSScriptRoot 'test-session-bundle.ps1') -Architecture $Architecture
+& (Join-Path $PSScriptRoot 'test-analysis.ps1') -Architecture $Architecture
 Write-Output 'All native tests passed. No foobar host was launched.'
 if ($env:DJ_STEM_ENGINE) {
     & (Join-Path $env:DJ_STEM_ENGINE 'venv/Scripts/python.exe') (Join-Path $repo 'tests/test-stem-backend.py')

@@ -14,7 +14,7 @@ int wmain(int argc,wchar_t** argv) {
         CRect client(0,0,dims.cx,dims.cy);
         assert(FaderStrip(client).Height()<=52);
         assert(PlayBothRect(client).right<FaderLeft(client));
-        assert(FaderRight(client)<LanguageRect(client,false).left);
+        assert(FaderRight(client)+24<=MasterMeterRect(client).left);assert(MasterMeterRect(client).right<LanguageRect(client,false).left);
         assert(LanguageRect(client,true).IsRectEmpty());
         for(int deck=0;deck<2;++deck) {
             auto L=MakeLayout(deck,client);

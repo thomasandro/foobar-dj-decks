@@ -31,6 +31,8 @@
 #include "queue_format.h"
 #include "queue_duration_hook.h"
 #include "auto_mix.h"
+#include "master_limiter.h"
+#include "bpm_provider.h"
 #include "queue_window.h"
 #include "settings_window.h"
 #include "tooltip_policy.h"
@@ -78,6 +80,9 @@ namespace {
     static cfg_int cfg_colorA({0x49961561,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},0);
     static cfg_int cfg_colorB({0x49961562,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},1);
     static cfg_int cfg_replaygain({0xa660da20,0x74ab,0x44f7,{0x95,0x4a,0x62,0xc3,0x92,0x13,0x51,0x03}},0);
+    static cfg_int cfg_bpmProvider({0x6139a003,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x03}},0);
+    static cfg_int cfg_masterLimiter({0x6139a001,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x01}},1);
+    static cfg_int cfg_masterCeiling({0x6139a002,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x02}},-10);
     static cfg_int cfg_scrobble({0xa660da21,0x74ab,0x44f7,{0x95,0x4a,0x62,0xc3,0x92,0x13,0x51,0x03}},0);
     static std::atomic<int> g_replaygain{0};
     static std::atomic<bool> g_scrobble{false},g_scrobbleReady{false};
@@ -480,7 +485,8 @@ namespace {
         auto strip=FaderStrip(client);return CRect(strip.left+8,strip.top+6,strip.left+66,strip.bottom-6);
     }
     static int FaderLeft(const CRect& client) { return FaderStrip(client).left+90; }
-    static int FaderRight(const CRect& client) { return FaderStrip(client).right-92; }
+    static int FaderRight(const CRect& client) { return FaderStrip(client).right-164; }
+    static CRect MasterMeterRect(const CRect& client){auto strip=FaderStrip(client);return CRect(strip.right-138,strip.top+6,strip.right-70,strip.bottom-6);}
     static CRect VersionRect(const CRect&) { return CRect(0,0,0,0); }
     static CRect LanguageRect(const CRect& client,bool second) {
         if(second) return CRect(0,0,0,0);
@@ -499,7 +505,8 @@ namespace {
 		DECLARE_WND_CLASS_EX(TEXT("{3E9B6D14-2A7C-4F58-B1D6-8A4C05E7D932}"), CS_VREDRAW | CS_HREDRAW, (-1));
 
 		void initialize_window(HWND parent) {
-			WIN32_OP(Create(parent) != NULL);
+			m_limitEnabled=cfg_masterLimiter.get()!=0;m_limitCeiling=std::clamp(double(cfg_masterCeiling.get()),-120.,-1.)/10.;
+            WIN32_OP(Create(parent) != NULL);
 			SetTimer(kTimerId, 16);    // ~60 images par seconde, pour un defilement fluide de la forme d'onde
 			RegisterDrop();            // le panneau accepte les morceaux glisses dessus
 			PostMessage(kRestoreMessage); // one restoration after window creation, no watcher
@@ -904,7 +911,10 @@ namespace {
 		unsigned m_outRate = 48000;   // frequence envoyee a la sortie audio
 
 		// --- Valeurs atomiques lues par le moteur sans verrou ---
-		std::atomic<float> m_crossfade{ 0.5f };   // position du crossfader : 0 = deck A seul, 1 = deck B seul
+		std::atomic<bool> m_limitEnabled{true};
+        std::atomic<double> m_limitCeiling{-1},m_masterPeak{0},m_limitReduction{0};
+        std::atomic<ULONGLONG> m_masterClipUntil{0},m_masterLimitUntil{0};
+        std::atomic<float> m_crossfade{ 0.5f };   // position du crossfader : 0 = deck A seul, 1 = deck B seul
 		std::atomic<bool> m_fixedPitch[2];
 		std::atomic<double> m_speed[2];
         std::atomic<int> m_speedRange[2];
@@ -1302,7 +1312,7 @@ namespace {
             add(L.automation,L"Lecture automatique : enchaînement de cette liste, alternance A/B, durée et courbe du fondu.",L"Automatic playback: this playlist, alternating A/B, fade duration and curve.");
             add(L.queueOpen,L"Ouvrir la liste de cette platine : glisser des morceaux, reordonner, supprimer. Double-clic pour charger.",L"Open this deck's playlist: drop tracks, reorder, remove. Double-click to load.");
             add(L.release,L"Arr\u00eater et lib\u00e9rer le fichier. Position conserv\u00e9e ; Lecture reprend au m\u00eame endroit. Lib\u00e8re aussi l'autre platine si elle utilise ce fichier.",L"Stop and release the file. Retains position; Play resumes there. Also releases the other deck if it uses this file.");
-            add(L.analyse[0],L"Calculer le BPM avec foo_bpm. La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using foo_bpm. Pauses and releases the file for tag writing. Resume after saving the result.");
+            add(L.analyse[0],L"Calculer le BPM avec l’analyseur choisi dans Réglages → Audio (Auto : Smart Tempo puis foo_bpm). La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using Settings → Audio analyser (Auto: Smart Tempo, then foo_bpm). Pauses and releases the file for tag writing. Resume after saving the result.");
             add(L.analyse[1],L"Calculer la tonalit\u00e9 avec foo_musical_key. Reprendre la lecture apr\u00e8s la fin de l'analyse et l'enregistrement des tags.",L"Calculate key using foo_musical_key. Resume after analysis and tag writing have finished.");
             add(L.analyse[2],L"Actualiser les tags : relire le BPM et la tonalit\u00e9 et afficher les valeurs. Ne lance pas d'analyse audio.",L"Refresh tags: read BPM and key and show their values. Does not analyse audio.");
             add(L.loopSnap,L"Q : aligner A/B sur le repère affiché le plus proche (selon le zoom). Grille manuelle ou estimée ; pointillés : phase indicative. Activer Q recale aussi les points existants et les sauvegarde.",L"Q: snap A/B to the nearest displayed line (zoom-dependent). Manual/estimated grid; dotted lines have indicative phase. Enabling Q also snaps and saves existing points.");
@@ -1333,6 +1343,7 @@ namespace {
         add(PlayBothRect(client),L"Inverser les deux \u00e9tats : lecture ensemble, pause ensemble ou \u00e9change de la platine en lecture.",L"Toggle both states: play together, pause together or swap the playing deck.");
         CRect fader=FaderStrip(client);fader.left=FaderLeft(client)-10;fader.right=FaderRight(client)+10;
         add(fader,L"Crossfader : doser les platines A et B.",L"Crossfader: blend decks A and B.");
+        add(MasterMeterRect(client),L"Mix principal : vert = niveau normal ; orange = réduction du limiteur ; rouge = dépassement de 0 dBFS sans limiteur ou signal invalide. Plafond et activation dans Réglages → Audio. Limiteur de crêtes échantillonnées, pas true peak. Préécoute casque indépendante.",L"Master mix: green = normal; amber = limiter gain reduction; red = over 0 dBFS with limiter bypassed or invalid signal. Enable/ceiling in Settings → Audio. Sample-peak limiter, not true peak. Headphone cue is independent.");
         add(LanguageRect(client,false),L"Réglages : fenêtre flottante à onglets, apparence, audio, casque, playlists, lecture et stems. DJ Decks " FOO_DJ_VERSION_W,L"Settings: floating tabs for appearance, audio, headphones, playlists, playback and stems. DJ Decks " FOO_DJ_VERSION_W);
         add(LanguageRect(client,true),L"Interface et infobulles en anglais.",L"English interface and tooltips.");
         for(size_t n=0;n<m_tips.size();++n) {
@@ -1641,7 +1652,7 @@ namespace {
 			dj_skin::icon(dc,caption,(m_alternate?(m_cachePlaying[0]||m_cachePlaying[1]):(m_cachePlaying[0]&&m_cachePlaying[1]))?dj_skin::Icon::pause:(!m_cachePlaying[0]&&!m_cachePlaying[1]?dj_skin::Icon::both:dj_skin::Icon::swap));
 
 			CRect labelA(strip.left+68, strip.top, left - 4, strip.bottom);
-			CRect labelB(right + 4, strip.top, strip.right-68, strip.bottom);
+			CRect labelB(right + 4, strip.top, right+24, strip.bottom);
 			dc.SetTextColor(DeckAccent(0));
 			dc.DrawText(L"A", -1, &labelA, DT_NOPREFIX | DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 			dc.SetTextColor(DeckAccent(1));
@@ -1658,6 +1669,14 @@ namespace {
 			DrawControl(dc, handle, RGB(203, 213, 226), RGB(239, 244, 250));
 			FillBox(dc, CRect(hx, cy - 10, hx + 1, cy + 10), kCanvas);
 		}
+
+        {auto meter=MasterMeterRect(rc);auto now=GetTickCount64();bool clipped=now<m_masterClipUntil.load(),limiting=m_limitEnabled.load()&&now<m_masterLimitUntil.load();
+            COLORREF color=clipped?RGB(255,80,80):(limiting?RGB(255,182,60):(m_limitEnabled.load()?RGB(96,220,155):kMuted));
+            DrawControl(dc,meter,kSurface,color);CFont meterFont;meterFont.CreatePointFont(70,L"Segoe UI");SelectObjectScope font(dc,(HGDIOBJ)(HFONT)meterFont);dc.SetTextColor(color);
+            wchar_t label[32];if(clipped)wcscpy_s(label,L"CLIP");else if(limiting)swprintf_s(label,L"-%.1f dB",m_limitReduction.load());else wcscpy_s(label,m_limitEnabled.load()?L"LIM":L"LIM OFF");
+            CRect text=meter;text.bottom-=7;dc.DrawText(label,-1,&text,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
+            CRect bar=meter;bar.DeflateRect(5,3);bar.top=bar.bottom-3;FillBox(dc,bar,RGB(25,30,36));double peak=m_masterPeak.load();double level=peak>0?std::clamp((20.*std::log10(peak)+60.)/60.,0.,1.):0.;bar.right=bar.left+int(bar.Width()*level);FillBox(dc,bar,color);
+        }
 
 		// Shared settings; changing appearance/language does not reload audio.
 		{
@@ -1966,18 +1985,20 @@ namespace {
         if(action==2) { RefreshDeckTags(deck,true); return; }
         // Public context-command identifiers from the components' upstream sources.
         static const GUID bpm={0x518d0234,0x3134,0x4fea,{0xbd,0x43,0x8f,0x61,0xee,0x3a,0x35,0x3b}};
+        static const GUID smart={0x51fa6f82,0x7669,0x4090,{0x99,0x7c,0x85,0x07,0xc6,0xec,0x2e,0x30}};
         static const GUID key={0xefb0d751,0x1a4e,0x4ea3,{0x9d,0x22,0x68,0x25,0x64,0xe7,0xad,0xca}};
         metadb_handle_list tracks;
         tracks.add_item(metadb::get()->handle_create(m_savedPath[deck].c_str(),m_savedSubsong[deck]));
-        bool available=false;
-        for(auto item:service_enum_t<contextmenu_item>()) for(unsigned n=0;n<item->get_num_items();++n)
-            if(item->get_item_guid(n)==(action==0?bpm:key)) available=true;
-        if(!available) { popup_message::g_show("Analysis command unavailable: foo_bpm / foo_musical_key.","DJ Decks"); return; }
+        bool hasSmart=false,hasClassic=false,hasKey=false;
+        for(auto item:service_enum_t<contextmenu_item>())for(unsigned n=0;n<item->get_num_items();++n){auto id=item->get_item_guid(n);hasSmart=hasSmart||id==smart;hasClassic=hasClassic||id==bpm;hasKey=hasKey||id==key;}
+        int provider=dj_bpm::select(cfg_bpmProvider.get(),hasSmart,hasClassic);
+        if((action==0&&provider<0)||(action!=0&&!hasKey)){popup_message::g_show(g_english.load()?"Selected analyser unavailable. Install foo_smart_tempo / foo_bpm for BPM, or foo_musical_key for key; check Settings > Audio.":"Analyseur choisi indisponible. Installer foo_smart_tempo / foo_bpm pour le BPM, ou foo_musical_key pour la tonalité ; vérifier Réglages > Audio.","DJ Decks");return;}
+        const GUID command=action==0?(provider==1?smart:bpm):key;
         ReleaseForTags(deck);
         // Never hold the audio mutex while another component opens a modal dialog.
         try {
-            if(!menu_helpers::run_command_context(action==0?bpm:key,pfc::guid_null,tracks))
-                popup_message::g_show(g_english.load()?"Analysis command unavailable. Check foo_bpm / foo_musical_key installation.":"Commande indisponible. Verifiez l'installation de foo_bpm / foo_musical_key.","DJ Decks");
+            if(!menu_helpers::run_command_context(command,pfc::guid_null,tracks))
+                popup_message::g_show(g_english.load()?"Analysis command unavailable. Check foo_smart_tempo / foo_bpm / foo_musical_key installation.":"Commande indisponible. Verifiez l'installation de foo_smart_tempo / foo_bpm / foo_musical_key.","DJ Decks");
         } catch(const std::exception& e) { popup_message::g_show(e.what(),"DJ Decks"); }
         RefreshDeckTags(deck);
     }
@@ -2563,7 +2584,15 @@ namespace {
         UpdateQueue(deck,m_queueCurrent[deck]>=0?std::vector<size_t>{(size_t)m_queueCurrent[deck]}:std::vector<size_t>{});
     }
     void CDjPanel::QueueAction(int deck,int action,std::vector<size_t> selected,size_t before) {
-        auto& queue=m_queue[deck];if(selected.empty())return;
+        auto& queue=m_queue[deck];
+        if(action==5){
+            if(queue.empty())return;bool en=g_english.load();auto owner=m_queueWindow[deck].m_hWnd;
+            if(::MessageBoxW(owner,en?L"Empty this deck's entire playlist?\nThe loaded track keeps playing. No music files are deleted.":L"Vider toute la liste de cette platine ?\nLe morceau chargé continue à jouer. Aucun fichier musical n’est supprimé.",L"DJ Decks",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;
+            CancelAutomation();m_chain[deck]=false;DropPreparation(deck);
+            if(m_previewOwned&&m_previewDeck==deck)StopPreview();
+            queue.clear();m_queueCurrent[deck]=-1;SaveSession();UpdateQueue(deck);return;
+        }
+        if(selected.empty())return;
         selected.erase(std::remove_if(selected.begin(),selected.end(),[&](size_t n){return n>=queue.size();}),selected.end());if(selected.empty())return;
         std::sort(selected.begin(),selected.end());
         if(action==0) {auto item=queue[selected[0]];m_queueCurrent[deck]=(int)selected[0];LoadDeck(deck,item.path.c_str(),item.subsong);}
@@ -3217,6 +3246,11 @@ namespace {
             combo(1100,text(L"Couleur de la platine A",L"Deck A color"),colors,dj_skin::colorIndex[0].load());combo(1120,text(L"Couleur de la platine B",L"Deck B color"),colors,dj_skin::colorIndex[1].load());
             note(text(L"Les couleurs et le thème s’appliquent aux platines et à leurs playlists. Les infobulles suivent la langue choisie.",L"Decks and playlists share colors/theme. Tooltips follow the selected language."));
         }else if(page==1){
+            combo(1230,text(L"Analyseur BPM",L"BPM analyser"),{text(L"Automatique : Smart Tempo puis foo_bpm",L"Auto: Smart Tempo, then foo_bpm"),L"foo_smart_tempo",L"foo_bpm"},std::clamp(int(cfg_bpmProvider.get()),0,2));
+            note(text(L"Analyse externe facultative sur le morceau chargé. Conserver BPM comme nom du tag dans l’analyseur. Valider/enregistrer le résultat puis Actualiser les tags ; reprendre la lecture manuellement.",L"Optional external analysis of the loaded track. Keep BPM as the analyser's output tag. Save the result, then Refresh tags; resume playback manually."));
+            toggle(1220,text(L"Limiteur du mix principal",L"Master output limiter"),m_limitEnabled.load());
+            const int ceilings[]={-3,-10,-30,-60};int ceiling=4;std::vector<std::wstring> choices={L"-0.3 dBFS",L"-1 dBFS",L"-3 dBFS",L"-6 dBFS"};for(int n=0;n<4;++n)if(cfg_masterCeiling.get()==ceilings[n])ceiling=n;if(ceiling==4)choices.push_back(std::to_wstring(cfg_masterCeiling.get()/10.)+L" dBFS");combo(1221,text(L"Plafond du limiteur",L"Limiter ceiling"),choices,ceiling);
+            note(text(L"Voyant du mix : vert = normal, orange = réduction (dB), rouge = saturation sans limiteur ou signal invalide. Stéréo liée, relâchement 80 ms, sans latence ajoutée. Crêtes échantillonnées, pas true peak ; préécoute casque indépendante.",L"Master indicator: green = normal, amber = reduction (dB), red = clipping with limiter bypassed or invalid signal. Stereo linked, 80 ms release, no added latency. Sample peaks, not true peak; headphone cue is independent."));
             combo(1210,L"ReplayGain",{text(L"Désactivé",L"Off"),text(L"Piste : gain + crête",L"Track: gain + peak"),text(L"Album : gain + crête",L"Album: gain + peak")},g_replaygain.load());
             toggle(220,text(L"Scrobbler les platines audibles via foo_scrobble",L"Scrobble audible decks via foo_scrobble"),g_scrobble.load());action(221,text(L"Diagnostic foo_scrobble…",L"foo_scrobble diagnostic…"));
             note(text(L"Le scrobbling nécessite foo_scrobble 1.6.x configuré. ReplayGain ne modifie pas les tags. La sortie du mix principal reste celle configurée dans foobar.",L"Scrobbling requires configured foo_scrobble 1.6.x. ReplayGain does not edit tags. Master output follows foobar's output configuration."));
@@ -3256,6 +3290,9 @@ namespace {
         else if(id==1000)SettingsCommand(1+value);else if(id==1010)SettingsCommand(10+value);else if(id==1100)SettingsCommand(100+value);else if(id==1120)SettingsCommand(120+value);else if(id==1210)SettingsCommand(210+value);else if(id==1300)SettingsCommand(value==4?304:300+value);
         else if(id==220){if((value!=0)!=g_scrobble.load())SettingsCommand(220);}else if(id==305){if((value!=0)!=(cfg_queueNumbers.get()!=0))SettingsCommand(305);}
         else if(id==200||id==221||id==304||id==306)SettingsCommand(id);
+        else if(id==1230){cfg_bpmProvider=std::clamp(value,0,2);}
+        else if(id==1220){m_limitEnabled=value!=0;cfg_masterLimiter=value?1:0;}
+        else if(id==1221){const int ceilings[]={-3,-10,-30,-60};if(value>=0&&value<4){cfg_masterCeiling=ceilings[value];m_limitCeiling=ceilings[value]/10.;}}
         else if(id==1400){
             if(value==0){StopPreview();m_cue[0]=m_cue[1]=false;cfg_cueBackend=GUID{};cfg_cueDevice=GUID{};ConfigureCue();}
             else if(value>0&&(size_t)value<=m_settingsDevices.size()){auto d=m_settingsDevices[value-1];auto core=output_manager::get()->getCoreConfig();if(d.backend==core.m_output&&d.device==core.m_device){RefreshSettingsDevices();return;}StopPreview();cfg_cueBackend=d.backend;cfg_cueDevice=d.device;ConfigureCue();}
@@ -3332,6 +3369,7 @@ namespace {
 			abort_callback_dummy abort;
 			std::vector<audio_sample> mix,cueMix;
             double previousCue[2]={0,0};
+            dj_master::Limiter masterLimiter;
 			ULONGLONG notReadySince = 0;   // moment ou la sortie a cesse d'etre prete (0 = elle l'est)
 			bool stallLogged = false;
 			FB2K_console_formatter() << "foo_dj : moteur audio demarre, sortie a " << outRate << " Hz";
@@ -3452,6 +3490,12 @@ namespace {
 					frames = kBlockFrames;
 					mix.assign(frames * kOutChannels, (audio_sample)0);
 				}
+                // Post-fader/volume/ReplayGain mix only. Never process cueMix here.
+                const bool limitEnabled=m_limitEnabled.load();
+                const auto meter=masterLimiter.process(mix.data(),frames,outRate,limitEnabled,m_limitCeiling.load());
+                m_masterPeak=meter.output;const auto meterNow=GetTickCount64();
+                if(meter.invalid||(!limitEnabled&&meter.input>1.))m_masterClipUntil=meterNow+1000;
+                if(limitEnabled&&meter.reduction>.1){m_limitReduction=meter.reduction;m_masterLimitUntil=meterNow+350;}
 				audio_chunk_impl chunk;
 				chunk.set_data(mix.data(), frames, kOutChannels, outRate, audio_chunk::channel_config_stereo);
                 out->process_samples(chunk);
@@ -3476,6 +3520,7 @@ namespace {
 			}
 		}
 		m_stallMs = 0;
+		m_masterPeak=0;m_limitReduction=0;m_masterClipUntil=0;m_masterLimitUntil=0;
 		m_engineFinished = true;
 	}
 

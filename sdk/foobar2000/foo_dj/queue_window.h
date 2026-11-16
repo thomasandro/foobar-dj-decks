@@ -49,8 +49,9 @@ public:
         const wchar_t* fr[]={L"Charger",L"Supprimer",L"Monter",L"Descendre"};
         const wchar_t* eng[]={L"Load",L"Remove",L"Move up",L"Move down"};
         for(int n=0;n<4;++n)::SetWindowTextW(buttons[n],en?eng[n]:fr[n]);
+        ::SetWindowTextW(buttons[5],en?L"Empty list":L"Vider la liste");
         ::SetWindowTextW(buttons[4],en?L"Close playlist":L"Fermer la playlist");
-        ::SetWindowTextW(help,en?L"Drag A/B: copy. Shift: move. Double-click: load. Delete: remove.":L"Glisser A/B : copier. Maj : déplacer. Double-clic : charger. Suppr : retirer.");
+        ::SetWindowTextW(help,en?L"Drag A/B: copy. Shift: move. Double-click: load. Delete: remove. Esc: close.":L"Glisser A/B : copier. Maj : déplacer. Double-clic : charger. Suppr : retirer. Échap : fermer.");
         ShowWindow(SW_SHOWNORMAL);SetForegroundWindow(m_hWnd);::SetFocus(list);
     }
     BEGIN_MSG_MAP_EX(DjQueueWindow)
@@ -68,10 +69,11 @@ public:
         MESSAGE_HANDLER(WM_DRAWITEM,OnDrawItem)
         MESSAGE_HANDLER(WM_CTLCOLORLISTBOX,OnColor)
         MESSAGE_HANDLER(WM_CTLCOLORSTATIC,OnColor)
+        MESSAGE_HANDLER(WM_KEYDOWN,OnKeyDown)
         MESSAGE_HANDLER(WM_COMMAND,OnCommand)
     END_MSG_MAP()
 private:
-    HWND buttons[5]={},help=nullptr;
+    HWND buttons[6]={},help=nullptr;
     HBRUSH darkBrush=nullptr;
     HFONT font=nullptr;
     int hotButton=-1;
@@ -91,6 +93,7 @@ private:
     }
     static LRESULT CALLBACK ButtonProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data){
         auto self=(DjQueueWindow*)data;
+        if(msg==WM_KEYDOWN&&w==VK_ESCAPE){self->OnClose();return 0;}
         if(msg==WM_MOUSEMOVE){
             int index=::GetDlgCtrlID(h)-101;
             if(self->hotButton!=index){int old=self->hotButton;self->hotButton=index;if(old>=0)::InvalidateRect(self->buttons[old],nullptr,FALSE);::InvalidateRect(h,nullptr,FALSE);}
@@ -99,6 +102,7 @@ private:
         if(msg==WM_MOUSELEAVE){self->hotButton=-1;::InvalidateRect(h,nullptr,FALSE);}
         return DefSubclassProc(h,msg,w,l);
     }
+    LRESULT OnKeyDown(UINT,WPARAM w,LPARAM,BOOL& handled){if(w==VK_ESCAPE){OnClose();return 0;}handled=FALSE;return 0;}
     BOOL OnErase(CDCHandle){return TRUE;}
     void OnPaint(CDCHandle){
         CPaintDC dc(m_hWnd);CRect r;GetClientRect(&r);
@@ -197,7 +201,7 @@ private:
             if(!HIWORD(hit)&&LOWORD(hit)==pressed&&GET_X_LPARAM(l)>=5&&GET_X_LPARAM(l)<31&&self->preview)self->preview(pressed);return 0;
         }
         if(msg==WM_CAPTURECHANGED||msg==WM_CANCELMODE||(msg==WM_KEYDOWN&&w==VK_ESCAPE))self->previewPressed=-1;
-        if((msg==WM_KEYDOWN&&w==VK_ESCAPE)||msg==WM_CANCELMODE){self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();if(::GetCapture()==h)::ReleaseCapture();return 0;}
+        if((msg==WM_KEYDOWN&&w==VK_ESCAPE)||msg==WM_CANCELMODE){bool gesture=self->dragging||self->preserveSelection||::GetCapture()==h;self->dragging=false;self->preserveSelection=false;self->dragSelection.clear();if(::GetCapture()==h)::ReleaseCapture();if(msg==WM_KEYDOWN&&!gesture)self->OnClose();return 0;}
         if(msg==WM_KEYDOWN && w=='A' && (::GetKeyState(VK_CONTROL)&0x8000) && !(::GetKeyState(VK_MENU)&0x8000)){
             ::SendMessage(h,LB_SETSEL,TRUE,-1);::InvalidateRect(h,nullptr,FALSE);return 0;
         }
@@ -252,8 +256,10 @@ private:
         for(int n=0;n<4;++n){buttons[n]=::CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,0,0,m_hWnd,(HMENU)(INT_PTR)(101+n),nullptr,nullptr);::SetWindowSubclass(buttons[n],ButtonProc,1,(DWORD_PTR)this);}
         buttons[4]=::CreateWindowW(L"BUTTON",english?L"Close playlist":L"Fermer la playlist",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,0,0,m_hWnd,(HMENU)105,nullptr,nullptr);
         ::SetWindowSubclass(buttons[4],ButtonProc,1,(DWORD_PTR)this);
+        buttons[5]=::CreateWindowW(L"BUTTON",english?L"Empty list":L"Vider la liste",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,0,0,m_hWnd,(HMENU)106,nullptr,nullptr);
+        ::SetWindowSubclass(buttons[5],ButtonProc,1,(DWORD_PTR)this);
         help=::CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,0,0,0,0,m_hWnd,nullptr,nullptr,nullptr);
-        for(auto h:{list,help,buttons[0],buttons[1],buttons[2],buttons[3]})::SendMessage(h,WM_SETFONT,(WPARAM)font,FALSE);
+        for(auto h:{list,help,buttons[0],buttons[1],buttons[2],buttons[3],buttons[5]})::SendMessage(h,WM_SETFONT,(WPARAM)font,FALSE);
         target=new Target(this);if(FAILED(::RegisterDragDrop(list,target))){target->Release();target=nullptr;}
         windows.push_back(this);
         return 0;
@@ -262,17 +268,18 @@ private:
         auto close=CloseRect(size.cx);::MoveWindow(buttons[4],close.left,close.top,close.Width(),close.Height(),TRUE);
         ::MoveWindow(help,8,50,(std::max)(1,(int)size.cx-16),30,TRUE);
         ::MoveWindow(list,8,82,(std::max)(1,(int)size.cx-16),(std::max)(1,(int)size.cy-130),TRUE);
-        int width=((int)size.cx-24)/4;
-        for(int n=0;n<4;++n)::MoveWindow(buttons[n],8+n*width,size.cy-43,width-4,36,TRUE);
+        int width=((int)size.cx-16)/5;
+        for(int n=0;n<5;++n)::MoveWindow(buttons[n==4?5:n],8+n*width,size.cy-43,width-4,36,TRUE);
         Invalidate(FALSE);
     }
-    void OnClose(){ShowWindow(SW_HIDE);}
+    void OnClose(){if(list)::SendMessage(list,WM_CANCELMODE,0,0);previewPressed=-1;ShowWindow(SW_HIDE);}
     void OnMinMax(MINMAXINFO* info){info->ptMinTrackSize.x=480;info->ptMinTrackSize.y=240;}
     void OnDestroy(){windows.erase(std::remove(windows.begin(),windows.end(),this),windows.end());if(target){::RevokeDragDrop(list);target->window=nullptr;target->Release();target=nullptr;}::RemoveWindowSubclass(list,ListProc,1);for(auto h:buttons)::RemoveWindowSubclass(h,ButtonProc,1);list=nullptr;if(font){::DeleteObject(font);font=nullptr;}if(darkBrush){::DeleteObject(darkBrush);darkBrush=nullptr;}}
     LRESULT OnCommand(UINT,WPARAM w,LPARAM,BOOL&) {
         if(LOWORD(w)==100 && HIWORD(w)==LBN_DBLCLK){if(action)action(0,selected(),0);}
         else if(LOWORD(w)>=101&&LOWORD(w)<=104){if(action)action(LOWORD(w)-101,selected(),0);}
         else if(LOWORD(w)==105)OnClose();
+        else if(LOWORD(w)==106){if(action)action(5,{},0);}
         return 0;
     }
 };

@@ -2,6 +2,8 @@
 int main(){
  _Module.Init(nullptr,GetModuleHandle(nullptr));
  CDjPanel panel;
+ panel.SettingsChanged(1230,1);assert(cfg_bpmProvider.get()==1);panel.SettingsChanged(1230,2);assert(cfg_bpmProvider.get()==2);panel.SettingsChanged(1230,0);assert(cfg_bpmProvider.get()==0);
+ panel.SettingsChanged(1220,0);assert(!panel.m_limitEnabled&&cfg_masterLimiter.get()==0);panel.SettingsChanged(1220,1);assert(panel.m_limitEnabled);panel.SettingsChanged(1221,2);assert(panel.m_limitCeiling==-3&&cfg_masterCeiling.get()==-30);panel.SettingsChanged(1221,1);assert(panel.m_limitCeiling==-1);
  for(bool english:{false,true}){g_english=english;assert(dj_settings::tabs(english).size()==6);for(int page=0;page<6;++page){auto rows=panel.SettingsValues(page);assert(!rows.empty());std::vector<int> ids;for(auto& item:rows)if(item.id){assert(std::find(ids.begin(),ids.end(),item.id)==ids.end());ids.push_back(item.id);if(item.kind==dj_settings::Kind::combo)assert(item.value>=0&&item.value<(int)item.options.size());}}}
  panel.SettingsChanged(1000,0);assert(!g_english);panel.SettingsChanged(1000,1);assert(g_english);
  panel.SettingsChanged(1010,1);assert(dj_skin::flat);panel.SettingsChanged(1100,3);assert(dj_skin::colorIndex[0]==3);panel.SettingsChanged(1120,4);assert(dj_skin::colorIndex[1]==4);

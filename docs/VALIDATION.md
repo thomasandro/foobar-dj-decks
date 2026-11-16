@@ -1,3 +1,9 @@
+# Release validation — 0.40.0-beta.1
+
+The user confirmed the installed x64 version working. Both architectures compile and pass full native suites for release. New tests exercise the sample-peak limiter across five rates and four ceilings, stereo linkage, impulse protection, exact finite bypass, release, chunk invariance and extreme/invalid samples. Actual analyser and clear methods run against mock services/dialog answers to check GUID/provider/subsong, release-before-dispatch, unavailable/error behavior, confirmation cancellation and loaded/other-list preservation. Hidden playlist/settings/tooltip tests cover new commands/layout. Real-host x86 and actual external Smart Tempo analysis/tag writing still require external verification. No foobar access, capture or monitoring is used for release work.
+
+Historical validation follows for context.
+
 # Release validation — 0.38.1-beta.1
 
 The user confirmed active playlist distribution and Ctrl+A in x64. Both architectures are compiled and checked with native suites for release; external real-host x86 feedback remains welcome. New regression cases cover alternating empty/odd/even/20,000-item lists, limits, duplicates/subsongs, unchanged inputs and actual Ctrl+A handling on two independent hidden playlist windows. No live foobar host, capture or monitoring is used.
