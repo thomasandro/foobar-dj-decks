@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.41.0-beta.1 — 2026-11-17 (public prerelease, x64 / x86)
+
+The owner confirms the installed x64 release and MIDI Learn working. Both full native suites pass. The owner has not tested this release in x86 foobar; broader controller/driver and x86 feedback remains welcome.
+
+- First opt-in MIDI input / MIDI Learn implementation, with a seventh themed settings category. Select a WinMM MIDI input, command and Learn, then send a Note, absolute CC (7-bit) or Pitch Bend (14-bit) message. Learning consumes the message without executing its action; button release/repeated-press edges are tracked. Relative encoders, jog/scratch, SysEx, LED feedback, MIDI clock and MIDI 2.0 are outside this version.
+- 24 assignable actions: crossfader, A/B volumes and tempo (selected range), play/pause, shared playback, return to start, unload, headphone Cue, set/toggle A/B loops, BPM matching and key matching. These delegate to existing transport/loop/cue methods; no second audio engine.
+- Per-command assignment removal, per-input clear with confirmation, inverted continuous controls and enabled-by-default soft takeover. Soft takeover waits near/crossing the current software value and re-arms after software/automation changes.
+- Versioned, bounded and validated profile persistence, up to 16 input profiles. Match by driver manufacturer/product, port name and duplicate-name occurrence, not transient device index. Reusing one physical message reassigns it from its previous command. Learn can be cancelled. Input refresh/retry is explicit; no background device scan.
+- MIDI disabled by default. A bounded 256-message callback queue is drained on the UI timer; callback performs no audio/UI/file operations. Overflow stops the input visibly until retry. A process-wide input lease prevents duplicate panel dispatch; errors leave mouse controls usable. Input stops/closes before panel destruction.
+- Native checks use simulated WinMM devices only: parsing, note/CC edges, Learn/collisions, pickup/inversion, Unicode persistence/invalid rollback, queue bounds, open/start failures, retry, exclusive ownership and clean teardown. Actual 24-command dispatcher is checked with a mock panel. The owner subsequently confirmed MIDI Learn working in x64 foobar; the automated suite itself does not exercise physical hardware. Broader controller/driver and x86 validation remains open.
+
+
 ## 0.40.3-beta.1 — 2026-11-17 (public prerelease, x64 / x86)
 
 Public release combining the previously unpublished 0.40.1 and 0.40.2 milestones below. The owner confirms the installed x64 release working. Both full native suites pass; the owner has not tested this release in x86 foobar. Fabcore’s actual output-device and UI/CPU retest remains necessary. Thanks to StyxCrosser and Fabcore for the reports and suggestions.

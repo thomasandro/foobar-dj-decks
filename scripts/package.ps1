@@ -43,6 +43,7 @@ try {
     Add-File $zip (Join-Path $repo 'docs/AB_LOOPS.md') 'AB_LOOPS.md'
     Add-File $zip (Join-Path $repo 'docs/SETTINGS.md') 'SETTINGS.md'
     Add-File $zip (Join-Path $repo 'docs/SESSION_FILES.md') 'SESSION_FILES.md'
+    Add-File $zip (Join-Path $repo 'docs/MIDI.md') 'MIDI.md'
     Add-File $zip (Join-Path $repo 'docs/TOOLTIPS.md') 'TOOLTIPS.md'
     Add-File $zip (Join-Path $repo 'docs/FABCORE_FIXES.fr.md') 'FABCORE_FIXES.fr.md'
     Add-File $zip (Join-Path $repo 'docs/BPM_ANALYSERS.md') 'BPM_ANALYSERS.md'

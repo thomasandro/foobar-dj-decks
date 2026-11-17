@@ -1,14 +1,13 @@
-# DJ Decks 0.40.3-beta.1 — corrections and settings improvements (x64 / x86)
+# DJ Decks 0.41.0-beta.1 — MIDI Learn (x64 / x86)
 
-Thanks to StyxCrosser and Fabcore for their testing and reports.
+First MIDI input implementation, off by default, in Settings → MIDI.
 
-- Auto master sample rate now follows the first playing track at engine start instead of an unconditional 48 kHz fallback. Settings → Audio offers Auto / 44.1 / 48 / 96 / 192 kHz; restart foobar after changing it. A rate forced by the output takes priority.
-- Corrected settings scrollbar and wheel routing, including fractional wheel input over closed combo boxes.
-- Bounded glossy-surface cache and 30 fps animation with coalesced volume/crossfader repaints, intended to reduce UI CPU cost.
-- Unload replaces Release; retained position and resume behavior are unchanged.
-- Settings category buttons follow the selected Glossy/Flat theme and deck A accent. Confirmed per-category defaults preserve tracks, playlist contents, positions, loop points and cache files; language is retained.
-- Settings option updates retain existing controls where possible; category rebuilds batch repaint to reduce flicker.
+- Select an input, enable MIDI, select a command and click MIDI Learn; press a button or move a knob. The learned message is consumed, not executed. Release buttons after learning.
+- 24 assignable actions: crossfader, deck volume/tempo, play/pause/common transport, start, unload, Cue, set/toggle A/B loops, BPM matching and key matching.
+- Saved per-input assignments, cancellation, per-command removal, confirmed input-map clear, inverted continuous controls and soft takeover enabled by default.
+- MIDI 1.0 Note/CC buttons, absolute 7-bit CC and 14-bit Pitch Bend. No relative encoders, jog/scratch, paired high-resolution CC, MIDI clock, SysEx or LED output.
+- Refresh/retry after input changes; no device polling. One MIDI-owning panel per foobar process. Bounded input queue; overload stops MIDI until retry. Existing mouse operation remains available.
 
-The installed x64 release works on my setup. **I have not tested this release in x86 foobar.** Both full native test suites pass, but Fabcore’s output-device, scrolling and CPU retest is still needed. No real-host CPU benchmark is claimed. Stems remain experimental.
+The owner confirms x64 installation and MIDI Learn working. Both builds pass full native regression suites; simulated WinMM tests cover input parsing, Learn, button edges, takeover, persistence, queue limits, failures and shutdown, and the actual 24-action dispatcher is checked with a mock panel. **The owner has not tested this release in x86 foobar.** Broader controller/driver testing remains welcome. Stems remain experimental and prepared offline.
 
-[Detailed changelog](../CHANGELOG.md) · [Download](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.40.3-beta.1)
+[Download](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.41.0-beta.1) · [MIDI guide](MIDI.md) · [Changelog](../CHANGELOG.md)

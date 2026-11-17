@@ -1,3 +1,7 @@
+# Release validation — 0.41.0-beta.1
+
+The owner confirms the installed x64 release and MIDI Learn working. The owner has not tested this release in x86 foobar. Both builds pass the full native suites. Tests use fake WinMM inputs (no physical device enumeration/opening) for Note/CC/Pitch Bend, Learn/collisions, press/release, takeover/inversion, strict Unicode persistence/rollback, 256-event queue/overflow, open/start failure, retry, ownership and teardown. Actual MidiCurrent/MidiApply methods execute with a mock panel for all 24 commands, selected tempo ranges, cue prerequisites and existing action delegation. Seven-category settings and earlier audio/playlist regressions pass. No foobar capture or monitoring. Broader controller/driver/x86 tests remain necessary.
+
 # Release validation — 0.40.3-beta.1
 
 The owner confirms the installed x64 release working, including the settings repaint improvement. Both architectures compile and pass the full native suites. Output-rate selection, settings scroll paths, bounded skin-cache reuse, default bindings, retained control HWNDs after option changes, category navigation and hidden window lifecycle are checked without a foobar host or physical output. The owner has not tested this release in x86 foobar. The 48 kHz device error and 99% CPU report are addressed in code, but successful operation/performance on Fabcore’s setup is not yet established. No real-device benchmark or guaranteed CPU reduction is claimed. No foobar capture or monitoring.

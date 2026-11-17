@@ -36,6 +36,11 @@ L’onglet Playlists propose désormais l’enregistrement des deux listes, l’
 
 ### Category defaults (0.40.2)
 
-The six category buttons follow the selected Glossy/Flat theme and deck A color. Ctrl+Tab / Ctrl+Shift+Tab switches categories; Tab and Shift+Tab move focus.
+The seven category buttons follow the selected Glossy/Flat theme and deck A color. Ctrl+Tab / Ctrl+Shift+Tab switches categories; Tab and Shift+Tab move focus.
 
 Appearance, Audio, Headphones, Playlists and Playback each offer a confirmed reset to their defaults. Language is retained. Resets preserve music, playlist contents, deck positions and A/B points. Headphone reset stops cue/excerpts and clears the selected device; Audio reset disables scrobbling/ReplayGain and restores the enabled -1 dBFS limiter and Auto sample rate (rate change after restart). Stems cache cleanup remains separate and is never triggered by reset.
+
+
+### MIDI (0.41.0)
+
+Seventh category: optional controller input, MIDI Learn, saved command assignments, soft takeover and inverted continuous controls. MIDI is off by default. See [MIDI guide / guide MIDI](MIDI.md) for the 24 actions, supported messages and first-version limits.

@@ -9,6 +9,10 @@ if (-not (Test-Path -LiteralPath $vcvars)) { throw 'Requested Visual Studio tool
 $output = Join-Path $repo 'build\tests'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $source = [IO.File]::ReadAllText((Join-Path $repo 'sdk\foobar2000\foo_dj\ui_element.cpp'))
+$midiFirst=$source.IndexOf('    double CDjPanel::MidiCurrent(')
+$midiLast=$source.IndexOf('    void CDjPanel::MidiInitialize(', $midiFirst)
+if($midiFirst -lt 0 -or $midiLast -lt $midiFirst){throw 'MIDI extraction anchors changed'}
+[IO.File]::WriteAllText((Join-Path $output 'midi-apply.inc'),$source.Substring($midiFirst,$midiLast-$midiFirst),[Text.UTF8Encoding]::new($false))
 $autoFirst = $source.IndexOf('void CDjPanel::CancelAutomation()')
 $autoMenu = $source.IndexOf('void CDjPanel::AutomationMenu(', $autoFirst)
 $autoTick = $source.IndexOf('void CDjPanel::AutomationTick()', $autoMenu)

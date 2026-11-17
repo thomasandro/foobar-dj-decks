@@ -34,6 +34,8 @@
 #include "master_limiter.h"
 #include "bpm_provider.h"
 #include "output_rate.h"
+#include "midi_control.h"
+#include "midi_input.h"
 #include "queue_window.h"
 #include "settings_window.h"
 #include "tooltip_policy.h"
@@ -81,6 +83,10 @@ namespace {
     static cfg_int cfg_colorA({0x49961561,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},0);
     static cfg_int cfg_colorB({0x49961562,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},1);
     static cfg_int cfg_replaygain({0xa660da20,0x74ab,0x44f7,{0x95,0x4a,0x62,0xc3,0x92,0x13,0x51,0x03}},0);
+    static cfg_int cfg_midiEnabled({0x6139a101,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,1}},0);
+    static cfg_int cfg_midiPickup({0x6139a102,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,2}},1);
+    static cfg_string cfg_midiDevice({0x6139a103,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,3}},"");
+    static cfg_string cfg_midiMappings({0x6139a104,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,4}},"");
     static cfg_int cfg_outputRate({0x6139a004,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x04}},0);
     static cfg_int cfg_bpmProvider({0x6139a003,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x03}},0);
     static cfg_int cfg_masterLimiter({0x6139a001,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x01}},1);
@@ -510,7 +516,8 @@ namespace {
 			m_outputRatePreference=cfg_outputRate.get();m_limitEnabled=cfg_masterLimiter.get()!=0;m_limitCeiling=std::clamp(double(cfg_masterCeiling.get()),-120.,-1.)/10.;
             WIN32_OP(Create(parent) != NULL);
 			SetTimer(kTimerId, 33);    // Cap UI animation at 30 fps; audio clocks are independent.
-			RegisterDrop();            // le panneau accepte les morceaux glisses dessus
+			MidiInitialize();
+            RegisterDrop();            // le panneau accepte les morceaux glisses dessus
 			PostMessage(kRestoreMessage); // one restoration after window creation, no watcher
 		}
 
@@ -563,6 +570,11 @@ namespace {
         }
     private:
         LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); UpdateQueue(0,m_queueWindow[0].list?m_queueWindow[0].selected():std::vector<size_t>{}); UpdateQueue(1,m_queueWindow[1].list?m_queueWindow[1].selected():std::vector<size_t>{}); return 0; }
+        dj_midi::Input m_midiInput;dj_midi::Router m_midiRouter;std::vector<dj_midi::Device> m_midiDevices;
+        std::vector<dj_midi::Profile> m_midiProfiles;int m_midiAction=0;std::wstring m_midiStatus;
+        void MidiInitialize();void MidiConfigure();void MidiRefreshDevices();void MidiSave();void MidiTick();
+        double MidiCurrent(int action);void MidiApply(int action,double value);
+        std::vector<dj_settings::Item> MidiValues();void MidiSetting(int id,int value);
         void RefreshDeckTags(int deck, bool readFile = false);
         void ReleaseForTags(int deck);
         bool ReopenAfterTags(int deck);
@@ -617,7 +629,7 @@ namespace {
 		BOOL OnEraseBkgnd(CDCHandle);
 		// On ne redessine vite que si quelque chose bouge (lecture, curseur deplace) ; au repos, 4 fois par seconde.
 		void OnTimer(UINT_PTR id) {
-            PreparationTick();PreviewTick();ScrobbleTick();StemsTick();AutomationTick();
+            MidiTick();PreparationTick();PreviewTick();ScrobbleTick();StemsTick();AutomationTick();
 			if (m_cachePlaying[0] || m_cachePlaying[1] || m_drag != 0 || m_dragDirty) { m_dragDirty=false;Invalidate(FALSE); return; }
 			CRect client; GetClientRect(&client);
 			for (int i = 0; i < 2; ++i) {
@@ -958,6 +970,7 @@ namespace {
 	}
 
 	void CDjPanel::OnDestroy() {
+        m_midiInput.close();
         m_settings.close();m_settings.values={};m_settings.changed={};
         if(m_tooltip) { ::DestroyWindow(m_tooltip); m_tooltip=nullptr; }
 		for(auto& window:m_queueWindow)if(window.m_hWnd)window.DestroyWindow();
@@ -3223,6 +3236,90 @@ namespace {
         m_settings.english=g_english.load();m_settings.accent=DeckAccent(0);
         m_pressedButton.SetRectEmpty();::ReleaseCapture();Invalidate();
     }
+
+    double CDjPanel::MidiCurrent(int action){
+        if(action==dj_midi::crossfade)return m_crossfade.load();
+        if(action==dj_midi::volumeA||action==dj_midi::volumeB)return m_volume[action-dj_midi::volumeA].load();
+        if(action==dj_midi::tempoA||action==dj_midi::tempoB){int deck=action-dj_midi::tempoA;double range=dj_tempo::range(m_speedRange[deck].load());return (m_speed[deck].load()-1+range)/(2*range);}
+        return 0;
+    }
+    void CDjPanel::MidiApply(int action,double value){
+        if(action==dj_midi::crossfade){CancelAutomation();m_crossfade=(float)value;}
+        else if(action==dj_midi::volumeA||action==dj_midi::volumeB)m_volume[action-dj_midi::volumeA]=(float)value;
+        else if(action==dj_midi::tempoA||action==dj_midi::tempoB){int d=action-dj_midi::tempoA;double r=dj_tempo::range(m_speedRange[d].load());m_speed[d]=1-r+2*r*value;}
+        else if(action==dj_midi::playA||action==dj_midi::playB)TogglePlay(action-dj_midi::playA);
+        else if(action==dj_midi::both)PlayBoth();
+        else if(action==dj_midi::startA||action==dj_midi::startB)SeekDeck(action-dj_midi::startA,0);
+        else if(action==dj_midi::unloadA||action==dj_midi::unloadB)ReleaseForTags(action-dj_midi::unloadA);
+        else if(action==dj_midi::cueA||action==dj_midi::cueB){int d=action-dj_midi::cueA;if(cfg_cueBackend.get()!=GUID{}){StopPreview();m_cue[d]=!m_cue[d].load();ConfigureCue();}}
+        else if(action>=dj_midi::loopAA&&action<=dj_midi::loopB)EditLoop((action-dj_midi::loopAA)/3,(action-dj_midi::loopAA)%3);
+        else if(action==dj_midi::bpmA||action==dj_midi::bpmB)MatchTempo(action-dj_midi::bpmA);
+        else if(action==dj_midi::keyA||action==dj_midi::keyB)MatchKey(action-dj_midi::keyA);
+        m_dragDirty=true;
+    }
+    void CDjPanel::MidiInitialize(){
+        m_midiRouter.pickup=cfg_midiPickup.get()!=0;
+        if(!dj_midi::load(cfg_midiMappings.get().get_ptr(),m_midiProfiles)){m_midiStatus=L"MIDI: invalid mappings / associations invalides";return;}
+        std::string key=cfg_midiDevice.get().get_ptr();for(auto& p:m_midiProfiles)if(p.device==key)m_midiRouter.bindings=p.bindings;
+        if(cfg_midiEnabled.get())MidiConfigure();else m_midiStatus=g_english?L"MIDI disabled":L"MIDI désactivé";
+    }
+    void CDjPanel::MidiRefreshDevices(){m_midiDevices=dj_midi::devices();}
+    void CDjPanel::MidiSave(){
+        std::string key=cfg_midiDevice.get().get_ptr();if(key.empty())return;
+        auto p=std::find_if(m_midiProfiles.begin(),m_midiProfiles.end(),[&](const dj_midi::Profile& p){return p.device==key;});
+        if(p==m_midiProfiles.end()){if(m_midiProfiles.size()>=16){m_midiStatus=L"MIDI: 16 profiles maximum";return;}m_midiProfiles.push_back({key});p=m_midiProfiles.end()-1;}
+        p->bindings=m_midiRouter.bindings;cfg_midiMappings=dj_midi::save(m_midiProfiles).c_str();
+    }
+    void CDjPanel::MidiConfigure(){
+        MidiRefreshDevices();m_midiInput.close();m_midiRouter.arm(-1);m_midiRouter.bindings={};m_midiRouter.pickup=cfg_midiPickup.get()!=0;
+        std::string key=cfg_midiDevice.get().get_ptr();for(auto& p:m_midiProfiles)if(p.device==key)m_midiRouter.bindings=p.bindings;
+        if(!cfg_midiEnabled.get()){m_midiStatus=g_english?L"MIDI disabled":L"MIDI désactivé";return;}
+        auto device=std::find_if(m_midiDevices.begin(),m_midiDevices.end(),[&](const dj_midi::Device& d){return d.key==key;});
+        if(device==m_midiDevices.end()){m_midiStatus=g_english?L"Selected MIDI input unavailable; select one and retry.":L"Entrée MIDI indisponible ; choisir une entrée et réessayer.";return;}
+        auto result=m_midiInput.open(device->id);if(result!=MMSYSERR_NOERROR){wchar_t text[MAXERRORLENGTH]={};midiInGetErrorTextW(result,text,MAXERRORLENGTH);m_midiStatus=L"MIDI: "+std::wstring(text);return;}
+        m_midiStatus=(g_english?L"MIDI connected: ":L"MIDI connecté : ")+device->name;
+    }
+    void CDjPanel::MidiTick(){
+        if(!m_midiInput.opened())return;bool lost=false;auto events=m_midiInput.drain(lost);
+        if(lost){m_midiInput.close();m_midiRouter.arm(-1);m_midiStatus=g_english?L"MIDI overload: input stopped. Retry connection.":L"Surcharge MIDI : entrée arrêtée. Réessayer la connexion.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();return;}
+        bool learned=false;for(auto event:events)learned|=m_midiRouter.receive(event,[&](int a){return MidiCurrent(a);},[&](int a,double v){MidiApply(a,v);});
+        if(learned){MidiSave();m_midiStatus=g_english?L"Association saved; release the button before using it.":L"Association enregistrée ; relâcher le bouton avant de l’utiliser.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();}
+    }
+    std::vector<dj_settings::Item> CDjPanel::MidiValues(){
+        using namespace dj_settings;bool en=g_english.load();std::vector<Item> out;
+        auto action=[&](int id,const wchar_t* fr,const wchar_t* english){out.push_back({id,en?english:fr,Kind::action,{},0,true});};
+        out.push_back({1700,en?L"Enable MIDI input":L"Activer l’entrée MIDI",Kind::toggle,{},cfg_midiEnabled.get()!=0,true});
+        std::vector<std::wstring> ports={en?L"No input selected":L"Aucune entrée sélectionnée"};int current=0;std::string key=cfg_midiDevice.get().get_ptr();
+        for(size_t n=0;n<m_midiDevices.size();++n){ports.push_back(m_midiDevices[n].name);if(m_midiDevices[n].key==key)current=(int)n+1;}
+        if(!key.empty()&&!current){ports.push_back(en?L"Saved input unavailable":L"Entrée mémorisée indisponible");current=(int)ports.size()-1;}
+        out.push_back({1701,en?L"Controller input":L"Entrée du contrôleur",Kind::combo,ports,current,true});action(1702,L"Actualiser / réessayer la connexion",L"Refresh / retry connection");
+        std::vector<std::wstring> names;for(int a=0;a<dj_midi::count;++a)names.push_back(dj_midi::name(a,en));out.push_back({1703,en?L"Command to assign":L"Commande à associer",Kind::combo,names,m_midiAction,true});
+        out.push_back({0,dj_midi::describe(m_midiRouter.bindings[m_midiAction],en),Kind::note,{},0,true});
+        out.push_back({1704,m_midiRouter.learning>=0?(en?L"Waiting: move a control or press a button…":L"En attente : bouger un contrôle ou appuyer sur un bouton…"):(en?L"MIDI Learn: assign selected command":L"MIDI Learn : associer la commande choisie"),Kind::action,{},0,m_midiInput.opened()});
+        action(1705,L"Annuler l’apprentissage",L"Cancel learning");action(1706,L"Supprimer cette association",L"Remove this assignment");
+        out.push_back({1707,en?L"Soft takeover for knobs / faders":L"Rattrapage des potentiomètres / faders",Kind::toggle,{},cfg_midiPickup.get()!=0,true});
+        out.push_back({1708,en?L"Invert this knob / fader":L"Inverser ce potentiomètre / fader",Kind::toggle,{},m_midiRouter.bindings[m_midiAction].inverted,dj_midi::continuous(m_midiAction)&&dj_midi::valid(m_midiRouter.bindings[m_midiAction])});
+        action(1709,L"Effacer les associations de cette entrée…",L"Clear this input’s assignments…");
+        out.push_back({0,m_midiStatus,Kind::note,{},0,true});
+        out.push_back({0,en?L"Choose input and command, then Learn. The learned message does not execute a command. CC absolute (7 bit), Pitch Bend (14 bit), Note/CC buttons only. No relative encoders, jog/scratch, SysEx or LED feedback.":L"Choisir entrée et commande puis Learn. Le message appris n’exécute pas la commande. CC absolus (7 bits), Pitch Bend (14 bits), boutons Note/CC. Pas d’encodeurs relatifs, jog/scratch, SysEx ou retour lumineux.",Kind::note,{},0,true});return out;
+    }
+    void CDjPanel::MidiSetting(int id,int value){
+        if(id==1700){cfg_midiEnabled=value?1:0;MidiConfigure();}
+        else if(id==1701){if(value==0){cfg_midiDevice="";MidiConfigure();}else if(value>0&&(size_t)value<=m_midiDevices.size()){cfg_midiDevice=m_midiDevices[value-1].key.c_str();MidiConfigure();}}
+        else if(id==1702)MidiConfigure();
+        else if(id==1703){m_midiAction=std::clamp(value,0,int(dj_midi::count)-1);m_midiRouter.arm(-1);}
+        else if(id==1704&&m_midiInput.opened()){
+            std::string key=cfg_midiDevice.get().get_ptr();bool known=false;for(auto& profile:m_midiProfiles)if(profile.device==key)known=true;
+            if(!known&&m_midiProfiles.size()>=16){m_midiStatus=g_english?L"Maximum 16 saved MIDI inputs reached.":L"Limite de 16 entrées MIDI mémorisées atteinte.";return;}
+            m_midiInput.clear();m_midiRouter.arm(m_midiAction);
+        }
+        else if(id==1705){m_midiInput.clear();m_midiRouter.arm(-1);}
+        else if(id==1706){m_midiRouter.forget(m_midiAction);MidiSave();}
+        else if(id==1707){cfg_midiPickup=value?1:0;m_midiRouter.pickup=value!=0;m_midiRouter.reset();}
+        else if(id==1708&&dj_midi::continuous(m_midiAction)){m_midiRouter.bindings[m_midiAction].inverted=value!=0;m_midiRouter.reset();MidiSave();}
+        else if(id==1709){bool en=g_english.load();if(::MessageBoxW(m_settings.m_hWnd,en?L"Clear all assignments for this MIDI input? Other inputs are preserved.":L"Effacer toutes les associations de cette entrée MIDI ? Les autres entrées sont conservées.",L"DJ Decks MIDI",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)==IDYES){m_midiInput.clear();m_midiRouter.arm(-1);m_midiRouter.bindings={};MidiSave();}}
+    }
+
     void CDjPanel::RefreshSettingsDevices(){
         m_settingsDevices.clear();m_settingsDeviceError.clear();
         try{auto core=output_manager::get()->getCoreConfig();output_manager_v2::get()->listDevices([&](const char* name,const GUID& backend,const GUID& device){
@@ -3231,7 +3328,7 @@ namespace {
         });}catch(const std::exception& e){m_settingsDeviceError=pfc::stringcvt::string_wide_from_utf8(e.what()).get_ptr();}
     }
     void CDjPanel::OpenSettings(int page){
-        if(!m_settings.m_hWnd)RefreshSettingsDevices();
+        if(!m_settings.m_hWnd){RefreshSettingsDevices();MidiRefreshDevices();}
         m_settings.values=[this](int tab){return SettingsValues(tab);};
         m_settings.changed=[this](int id,int value){SettingsChanged(id,value);};
         m_settings.open(m_hWnd,g_english.load(),DeckAccent(0),page);
@@ -3243,6 +3340,7 @@ namespace {
         auto toggle=[&](int id,std::wstring label,bool value,bool enabled=true){out.push_back({id,label,Kind::toggle,{},value?1:0,enabled});};
         auto action=[&](int id,std::wstring label){out.push_back({id,label,Kind::action,{},0,true});};
         auto note=[&](std::wstring label){out.push_back({0,label,Kind::note,{},0,true});};
+        if(page==6)return MidiValues();
         if(page==0){
             combo(1000,text(L"Langue",L"Language"),{L"Français",L"English"},en?1:0);
             combo(1010,text(L"Thème",L"Theme"),{text(L"Brillant",L"Glossy"),text(L"Plat / sobre",L"Flat / subdued")},dj_skin::flat.load()?1:0);
@@ -3294,6 +3392,7 @@ namespace {
         return out;
     }
     void CDjPanel::SettingsChanged(int id,int value){
+        if(id>=1700&&id<=1709){MidiSetting(id,value);return;}
         if(id>=1900&&id<1905){
             // Reuse the normal setters so persisted and live values stay in sync.
             // Language, loaded media, transport and loop points are intentionally retained.

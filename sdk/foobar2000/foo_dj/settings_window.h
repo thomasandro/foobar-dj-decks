@@ -12,11 +12,11 @@ namespace dj_settings {
 enum class Kind {combo,toggle,action,note};
 struct Item {int id;std::wstring label;Kind kind;std::vector<std::wstring> options;int value=0;bool enabled=true;};
 inline COLORREF foreground(bool enabled){return enabled?RGB(235,241,248):RGB(155,168,184);}
-inline std::vector<std::wstring> tabs(bool en){return en?std::vector<std::wstring>{L"Appearance",L"Audio",L"Headphones",L"Playlists",L"Playback",L"Stems"}:std::vector<std::wstring>{L"Apparence",L"Audio",L"Casque",L"Playlists",L"Lecture",L"Stems"};}
+inline std::vector<std::wstring> tabs(bool en){return en?std::vector<std::wstring>{L"Appearance",L"Audio",L"Headphones",L"Playlists",L"Playback",L"Stems",L"MIDI"}:std::vector<std::wstring>{L"Apparence",L"Audio",L"Casque",L"Playlists",L"Lecture",L"Stems",L"MIDI"};}
 }
 // Owned, modeless and event-driven. No host polling, decoding or audio output here.
 class DjSettingsWindow:public CWindowImpl<DjSettingsWindow> {
-    HWND categories[6]={};HWND tab=nullptr,content=nullptr,closeButton=nullptr;HFONT font=nullptr;HBRUSH background=nullptr,field=nullptr;
+    HWND categories[7]={};HWND tab=nullptr,content=nullptr,closeButton=nullptr;HFONT font=nullptr;HBRUSH background=nullptr,field=nullptr;
     struct Row{HWND label=nullptr,control=nullptr;int y=0,height=0;};std::vector<Row> controls;
     std::vector<dj_settings::Item> items;int offset=0,total=0;bool rebuilding=false,layingOut=false;int wheelRemainder=0;
     static LRESULT CALLBACK keyProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data){
@@ -26,7 +26,7 @@ class DjSettingsWindow:public CWindowImpl<DjSettingsWindow> {
         if(msg==WM_KEYDOWN){
             if(w==VK_ESCAPE){::PostMessage(self->m_hWnd,WM_CLOSE,0,0);return 0;}
             if(w==VK_TAB){
-                if(::GetKeyState(VK_CONTROL)<0){self->select((self->selected+(::GetKeyState(VK_SHIFT)<0?5:1))%6);::SetFocus(self->categories[self->selected]);}
+                if(::GetKeyState(VK_CONTROL)<0){self->select((self->selected+(::GetKeyState(VK_SHIFT)<0?6:1))%7);::SetFocus(self->categories[self->selected]);}
                 else{auto next=::GetNextDlgTabItem(self->m_hWnd,h,::GetKeyState(VK_SHIFT)<0);if(next&&next!=h)::SetFocus(next);else ::SetFocus(self->closeButton);}
                 return 0;
             }
@@ -68,7 +68,7 @@ public:
     std::function<void(int,int)> changed;
     int px(int n)const{return MulDiv(n,dpi,96);}
     void open(HWND owner,bool en,COLORREF color,int page=-1,bool visible=true){
-        english=en;accent=color;if(page>=0)selected=std::clamp(page,0,5);
+        english=en;accent=color;if(page>=0)selected=std::clamp(page,0,6);
         if(m_hWnd){refresh();if(visible){ShowWindow(SW_RESTORE);::SetForegroundWindow(m_hWnd);}return;}
         HDC dc=::GetDC(owner);if(dc){dpi=::GetDeviceCaps(dc,LOGPIXELSX);::ReleaseDC(owner,dc);}if(dpi<96)dpi=96;
         MONITORINFO mi={sizeof(mi)};::GetMonitorInfo(::MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&mi);RECT o;::GetWindowRect(owner,&o);
@@ -78,7 +78,7 @@ public:
         if(m_hWnd&&visible){ShowWindow(SW_SHOW);::SetForegroundWindow(m_hWnd);}
     }
     void close(){if(m_hWnd)DestroyWindow();}
-    void select(int page){page=std::clamp(page,0,5);if(page==selected&&!controls.empty())return;selected=page;offset=0;refresh();}
+    void select(int page){page=std::clamp(page,0,6);if(page==selected&&!controls.empty())return;selected=page;offset=0;refresh();}
     int scrollOffset()const{return offset;}
     HWND viewport()const{return content;}
     HWND control(int id)const{return content?::GetDlgItem(content,id):nullptr;}
@@ -86,7 +86,7 @@ public:
         if(!m_hWnd||!tab||rebuilding)return;rebuilding=true;
         auto setText=[](HWND h,const std::wstring& text){int length=::GetWindowTextLengthW(h);std::wstring old(length+1,L'\0');::GetWindowTextW(h,old.data(),length+1);old.resize(length);if(old!=text)::SetWindowTextW(h,text.c_str());};
         auto names=dj_settings::tabs(english);setText(m_hWnd,english?L"DJ Decks — Settings":L"DJ Decks — Réglages");setText(closeButton,english?L"Close":L"Fermer");
-        for(int n=0;n<6;++n){setText(categories[n],names[n]);::InvalidateRect(categories[n],nullptr,FALSE);}
+        for(int n=0;n<7;++n){setText(categories[n],names[n]);::InvalidateRect(categories[n],nullptr,FALSE);}
         auto next=values?values(selected):std::vector<dj_settings::Item>{};
         bool reuse=next.size()==items.size()&&controls.size()==items.size();
         if(reuse)for(size_t n=0;n<next.size();++n)if(next[n].id!=items[n].id||next[n].kind!=items[n].kind||next[n].options!=items[n].options){reuse=false;break;}
@@ -114,7 +114,7 @@ public:
         }
         total=y;layout();if(redraw)::SendMessage(content,WM_SETREDRAW,TRUE,0);rebuilding=false;if(auto h=control(focusID))::SetFocus(h);::RedrawWindow(content,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN);::InvalidateRect(m_hWnd,nullptr,FALSE);
     }
-    void layout(){if(!m_hWnd)return;CRect r;GetClientRect(&r);::MoveWindow(content,px(12),px(88),r.Width()-px(24),(std::max)(px(40),r.Height()-px(144)),FALSE);::MoveWindow(closeButton,(std::max)(px(12),r.Width()-px(122)),r.Height()-px(44),px(108),px(30),FALSE);for(int n=0;n<6;++n){int width=r.Width()-px(24);::MoveWindow(categories[n],px(12)+width*n/6,px(46),(width*(n+1)/6-width*n/6)-px(3),px(34),FALSE);}layoutRows();}
+    void layout(){if(!m_hWnd)return;CRect r;GetClientRect(&r);::MoveWindow(content,px(12),px(88),r.Width()-px(24),(std::max)(px(40),r.Height()-px(144)),FALSE);::MoveWindow(closeButton,(std::max)(px(12),r.Width()-px(122)),r.Height()-px(44),px(108),px(30),FALSE);for(int n=0;n<7;++n){int width=r.Width()-px(24);::MoveWindow(categories[n],px(12)+width*n/7,px(46),(width*(n+1)/7-width*n/7)-px(3),px(34),FALSE);}layoutRows();}
     BEGIN_MSG_MAP_EX(DjSettingsWindow)
         MSG_WM_CREATE(OnCreate)
         MSG_WM_DESTROY(OnDestroy)
@@ -136,7 +136,7 @@ public:
     int OnCreate(LPCREATESTRUCT){
         INITCOMMONCONTROLSEX init={sizeof(init),ICC_TAB_CLASSES|ICC_STANDARD_CLASSES};::InitCommonControlsEx(&init);
         font=::CreateFontW(-px(14),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");background=::CreateSolidBrush(RGB(17,21,27));field=::CreateSolidBrush(RGB(29,35,44));
-        tab=m_hWnd;for(int n=0;n<6;++n)categories[n]=child(L"BUTTON",L"",WS_TABSTOP|BS_OWNERDRAW,20+n,m_hWnd);
+        tab=m_hWnd;for(int n=0;n<7;++n)categories[n]=child(L"BUTTON",L"",WS_TABSTOP|BS_OWNERDRAW,20+n,m_hWnd);
         WNDCLASSEXW scrollClass={sizeof(scrollClass)};scrollClass.lpfnWndProc=::DefWindowProcW;scrollClass.hInstance=::GetModuleHandle(nullptr);scrollClass.lpszClassName=L"DJDecks_SettingsViewport_v2";::RegisterClassExW(&scrollClass);
         content=::CreateWindowExW(WS_EX_CONTROLPARENT,L"DJDecks_SettingsViewport_v2",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|WS_CLIPCHILDREN,0,0,1,1,m_hWnd,nullptr,::GetModuleHandle(nullptr),nullptr);::SetWindowSubclass(content,contentProc,1,(DWORD_PTR)this);
         closeButton=child(L"BUTTON",L"",WS_TABSTOP|BS_OWNERDRAW,1,m_hWnd);
@@ -149,7 +149,7 @@ public:
     BOOL OnErase(CDCHandle){return TRUE;}
     void OnPaint(CDCHandle){CPaintDC dc(m_hWnd);CRect r;GetClientRect(&r);dc.FillRect(r,background);auto old=dc.SelectFont(font);dc.SetBkMode(TRANSPARENT);dc.SetTextColor(accent);CRect title(px(18),px(10),r.right-px(16),px(40));dc.DrawText(english?L"DJ Decks settings":L"Réglages DJ Decks",-1,title,DT_SINGLELINE|DT_VCENTER);dc.SetTextColor(RGB(175,188,200));CRect hint(px(18),r.bottom-px(46),r.right-px(136),r.bottom-px(10));dc.DrawText(english?L"Changes apply immediately.":L"Modifications appliquées immédiatement.",-1,hint,DT_WORDBREAK);dc.SelectFont(old);}
     LRESULT OnNotify(UINT,WPARAM,LPARAM l,BOOL& handled){auto n=(NMHDR*)l;if(n->hwndFrom==tab&&n->code==TCN_SELCHANGE){selected=TabCtrl_GetCurSel(tab);offset=0;refresh();return 0;}handled=FALSE;return 0;}
-    LRESULT OnCommand(UINT,WPARAM w,LPARAM l,BOOL&){int id=LOWORD(w),code=HIWORD(w);if(id==1){OnClose();return 0;}if(id>=20&&id<26&&code==BN_CLICKED){select(id-20);return 0;}
+    LRESULT OnCommand(UINT,WPARAM w,LPARAM l,BOOL&){int id=LOWORD(w),code=HIWORD(w);if(id==1){OnClose();return 0;}if(id>=20&&id<27&&code==BN_CLICKED){select(id-20);return 0;}
         if(id>=1900&&id<1905&&code==BN_CLICKED){if(::MessageBoxW(m_hWnd,english?L"Restore this category's defaults? Tracks, playlists, positions, loop points and cache files are preserved.":L"Rétablir les valeurs par défaut de cette catégorie ? Morceaux, playlists, positions, points de boucle et fichiers du cache sont conservés.",english?L"Reset to defaults":L"Valeurs par défaut",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)!=IDYES)return 0;}
         if(rebuilding)return 0;
         for(const auto& item:items)if(item.id==id&&item.enabled){bool combo=item.kind==dj_settings::Kind::combo;if((combo&&code!=CBN_SELCHANGE)||(!combo&&code!=BN_CLICKED)||item.kind==dj_settings::Kind::note)return 0;
@@ -161,7 +161,7 @@ public:
     LRESULT OnDraw(UINT,WPARAM,LPARAM l,BOOL& handled){
         auto d=(DRAWITEMSTRUCT*)l;
         if(d->CtlType==ODT_BUTTON){
-            if(d->CtlID>=20&&d->CtlID<26){bool active=int(d->CtlID)-20==selected;dj_skin::surface(d->hDC,d->rcItem,accent,false,active,(d->itemState&ODS_SELECTED)!=0);auto old=::SelectObject(d->hDC,font);::SetBkMode(d->hDC,TRANSPARENT);::SetTextColor(d->hDC,active?accent:RGB(224,232,240));wchar_t text[64]={};::GetWindowTextW(d->hwndItem,text,64);RECT area=d->rcItem;::DrawTextW(d->hDC,text,-1,&area,DT_CENTER|DT_VCENTER|DT_SINGLELINE);if(d->itemState&ODS_FOCUS){::InflateRect(&area,-4,-4);::DrawFocusRect(d->hDC,&area);}::SelectObject(d->hDC,old);return TRUE;}
+            if(d->CtlID>=20&&d->CtlID<27){bool active=int(d->CtlID)-20==selected;dj_skin::surface(d->hDC,d->rcItem,accent,false,active,(d->itemState&ODS_SELECTED)!=0);auto old=::SelectObject(d->hDC,font);::SetBkMode(d->hDC,TRANSPARENT);::SetTextColor(d->hDC,active?accent:RGB(224,232,240));wchar_t text[64]={};::GetWindowTextW(d->hwndItem,text,64);RECT area=d->rcItem;::DrawTextW(d->hDC,text,-1,&area,DT_CENTER|DT_VCENTER|DT_SINGLELINE);if(d->itemState&ODS_FOCUS){::InflateRect(&area,-4,-4);::DrawFocusRect(d->hDC,&area);}::SelectObject(d->hDC,old);return TRUE;}
             const dj_settings::Item* entry=nullptr;for(const auto& item:items)if(item.id==(int)d->CtlID){entry=&item;break;}
             bool close=d->hwndItem==closeButton;if(!entry&&!close){handled=FALSE;return 0;}
             bool enabled=close||entry->enabled,toggle=entry&&entry->kind==dj_settings::Kind::toggle,checked=entry&&entry->value!=0;

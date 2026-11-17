@@ -3,7 +3,7 @@
 [English](README.md) · [Historique](CHANGELOG.md) · [Compilation](docs/BUILD.md) · [Limites connues](docs/KNOWN_ISSUES.md) · [Discussion sur Hydrogenaudio](https://hydrogenaudio.org/index.php/topic,130167.0.html)
 
 Deux platines indépendantes dans foobar2000, avec mixage et formes d’onde.
-**0.40.3-beta.1 : paquets bêta x64 et x86. Les stems restent expérimentaux.**
+**0.41.0-beta.1 : paquets bêta x64 et x86. Les stems restent expérimentaux.**
 
 Également disponibles : [cache des stems](docs/STEM_CACHE.md), [ReplayGain et scrobbling facultatif](docs/SCROBBLING_REPLAYGAIN.md), [formats de playlist et transferts A/B](docs/PLAYLISTS.md).
 
@@ -13,20 +13,20 @@ Nouveautés depuis 0.37 : **répartir la playlist active de foobar entre A et B*
 
 Nouveautés depuis 0.38.1 : **limiteur du mix avec voyant de saturation** ([guide](docs/MASTER_LIMITER.fr.md)), **Échap pour masquer les playlists**, bouton **Vider la liste** et choix de l’**analyseur BPM** (Automatique / foo_smart_tempo / foo_bpm). [Détails](docs/BPM_ANALYSERS.md).
 
-Depuis 0.40.0 : **fréquence du mix automatique ou réglable**, défilement des réglages corrigé, rendu brillant mis en cache et interface limitée à 30 images/s, **Décharger**, catégories aux couleurs du thème et remise à zéro avec confirmation. Les changements d’option conservent leurs contrôles pour réduire le scintillement. La x64 fonctionne sur mon installation ; **je n’ai pas testé cette version dans foobar x86**. Les tests natifs passent sur les deux architectures ; les corrections audio/CPU restent à confirmer chez Fabcore. [Détails](docs/FABCORE_FIXES.fr.md).
+Nouveauté 0.41.0 : **MIDI Learn**, 24 commandes des platines/mixeur associables, mémorisation par entrée, rattrapage et inversion des potentiomètres. MIDI désactivé par défaut. Boutons Note/CC, CC absolus et Pitch Bend ; pas encore de jog/scratch, encodeurs relatifs ou retour lumineux. MIDI Learn fonctionne sur mon installation x64 ; cette version n’a pas été testée par moi dans foobar x86. [Guide MIDI et limites](docs/MIDI.md).
 
 ## ⬇ Télécharger l’extension
 
-**[Télécharger DJ Decks 0.40.3-beta.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.40.3-beta.1/foo_dj-0.40.3-beta.1-win-x64.fb2k-component)**
+**[Télécharger DJ Decks 0.41.0-beta.1 pour Windows x64](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.41.0-beta.1/foo_dj-0.41.0-beta.1-win-x64.fb2k-component)**
 
-**[Télécharger en 32 bits (x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.40.3-beta.1/foo_dj-0.40.3-beta.1-win-x86.fb2k-component)**
+**[Télécharger en 32 bits (x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.41.0-beta.1/foo_dj-0.41.0-beta.1-win-x86.fb2k-component)**
 
-[Sources complètes correspondantes (x64 et x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.40.3-beta.1/foo_dj-0.40.3-beta.1-source.zip)
+[Sources complètes correspondantes (x64 et x86)](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.41.0-beta.1/foo_dj-0.41.0-beta.1-source.zip)
 
 Fichier installable `.fb2k-component` pour foobar2000 2.x : x64 ou x86 selon votre installation.
 Dans foobar2000 : **Préférences → Composants → Installer…**, puis redémarrer.
 
-[Télécharger la bêta et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.40.3-beta.1)
+[Télécharger la bêta et les sources correspondantes](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.41.0-beta.1)
 Le développement a été assisté par IA ; les revues du moteur audio et des threads
 ainsi que les retours reproductibles sont bienvenus.
 
@@ -72,7 +72,7 @@ pour l’idée des playlists flottantes et ses retours sur l’interface et la l
 ## Moteur de stems facultatif — expérimental
 
 Le composant fonctionne sans Python. Pour les stems, installer Python 3.10–3.12,
-télécharger le [ZIP de l’installateur du moteur](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.40.3-beta.1/foo_dj-stems-engine-0.40.3-beta.1.zip), le décompresser puis
+télécharger le [ZIP de l’installateur du moteur](https://github.com/thomasandro/foobar-dj-decks/releases/download/v0.41.0-beta.1/foo_dj-stems-engine-0.41.0-beta.1.zip), le décompresser puis
 lancer `./install-stems.ps1 -DownloadModel` dans PowerShell. Les dépendances et le
 modèle htdemucs sont téléchargés séparément. CUDA est choisi s’il est disponible,
 avec retour au CPU en cas d’échec. `-CPUOnly` installe uniquement le moteur CPU.
@@ -87,7 +87,7 @@ ont été faits avec foobar2000 2.26.3 preview du 8 novembre 2026. Les autres ve
 Columns UI n’est fournie.
 
 Pour le premier essai, utiliser un profil portable séparé. Installer
-`foo_dj-0.40.3-beta.1-win-x64.fb2k-component` via
+`foo_dj-0.41.0-beta.1-win-x64.fb2k-component` via
 **Préférences → Composants → Installer…**, puis redémarrer. Dans l’édition de disposition
 de Default UI, ajouter **DJ Decks** (Utilitaires). Un grand panneau est préférable ;
 commencer vers 900 × 650 px. WebView2, SMP et Smooth Browser ne sont pas nécessaires. Le composant utilise
