@@ -1,5 +1,6 @@
 #pragma once
 #include <commctrl.h>
+#include "dj_skin.h"
 #include <uxtheme.h>
 #include <functional>
 #include <vector>
@@ -15,16 +16,17 @@ inline std::vector<std::wstring> tabs(bool en){return en?std::vector<std::wstrin
 }
 // Owned, modeless and event-driven. No host polling, decoding or audio output here.
 class DjSettingsWindow:public CWindowImpl<DjSettingsWindow> {
-    HWND tab=nullptr,content=nullptr,closeButton=nullptr;HFONT font=nullptr;HBRUSH background=nullptr,field=nullptr;
+    HWND categories[6]={};HWND tab=nullptr,content=nullptr,closeButton=nullptr;HFONT font=nullptr;HBRUSH background=nullptr,field=nullptr;
     struct Row{HWND label=nullptr,control=nullptr;int y=0,height=0;};std::vector<Row> controls;
-    std::vector<dj_settings::Item> items;int offset=0,total=0;bool rebuilding=false;
+    std::vector<dj_settings::Item> items;int offset=0,total=0;bool rebuilding=false,layingOut=false;int wheelRemainder=0;
     static LRESULT CALLBACK keyProc(HWND h,UINT msg,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data){
         auto self=reinterpret_cast<DjSettingsWindow*>(data);
-        if(msg==WM_SETFOCUS){for(auto& row:self->controls)if(row.control==h){RECT r;::GetClientRect(self->content,&r);if(row.y<self->offset)self->scrollBy(row.y-self->offset);else if(row.y+row.height>self->offset+r.bottom)self->scrollBy(row.y+row.height-self->offset-r.bottom);break;}}
+        if(msg==WM_MOUSEWHEEL){wchar_t cls[32]={};::GetClassNameW(h,cls,32);if(wcscmp(cls,L"ComboBox")!=0||!::SendMessage(h,CB_GETDROPPEDSTATE,0,0)){self->wheel(GET_WHEEL_DELTA_WPARAM(w));return 0;}}
+        if(msg==WM_SETFOCUS&&!self->layingOut){for(auto& row:self->controls)if(row.control==h){RECT r;::GetClientRect(self->content,&r);if(row.y<self->offset)self->scrollBy(row.y-self->offset);else if(row.y+row.height>self->offset+r.bottom)self->scrollBy(row.y+row.height-self->offset-r.bottom);break;}}
         if(msg==WM_KEYDOWN){
             if(w==VK_ESCAPE){::PostMessage(self->m_hWnd,WM_CLOSE,0,0);return 0;}
             if(w==VK_TAB){
-                if(::GetKeyState(VK_CONTROL)<0){self->select((self->selected+(::GetKeyState(VK_SHIFT)<0?5:1))%6);::SetFocus(self->tab);}
+                if(::GetKeyState(VK_CONTROL)<0){self->select((self->selected+(::GetKeyState(VK_SHIFT)<0?5:1))%6);::SetFocus(self->categories[self->selected]);}
                 else{auto next=::GetNextDlgTabItem(self->m_hWnd,h,::GetKeyState(VK_SHIFT)<0);if(next&&next!=h)::SetFocus(next);else ::SetFocus(self->closeButton);}
                 return 0;
             }
@@ -35,7 +37,7 @@ class DjSettingsWindow:public CWindowImpl<DjSettingsWindow> {
         auto self=reinterpret_cast<DjSettingsWindow*>(data);
         if(msg==WM_DRAWITEM||msg==WM_MEASUREITEM||msg==WM_COMMAND||msg==WM_CTLCOLORSTATIC||msg==WM_CTLCOLORBTN||msg==WM_CTLCOLOREDIT||msg==WM_CTLCOLORLISTBOX)return ::SendMessage(self->m_hWnd,msg,w,l);
         if(msg==WM_VSCROLL){self->scroll(LOWORD(w),HIWORD(w));return 0;}
-        if(msg==WM_MOUSEWHEEL){self->scrollBy(-GET_WHEEL_DELTA_WPARAM(w)/WHEEL_DELTA*self->px(90));return 0;}
+        if(msg==WM_MOUSEWHEEL){self->wheel(GET_WHEEL_DELTA_WPARAM(w));return 0;}
         if(msg==WM_ERASEBKGND){RECT r;::GetClientRect(h,&r);::FillRect((HDC)w,&r,self->background);return 1;}
         return ::DefSubclassProc(h,msg,w,l);
     }
@@ -43,18 +45,21 @@ class DjSettingsWindow:public CWindowImpl<DjSettingsWindow> {
         HWND h=::CreateWindowExW(0,cls,text,WS_CHILD|WS_VISIBLE|style,0,0,1,1,parent,(HMENU)(INT_PTR)id,::GetModuleHandle(nullptr),nullptr);
         if(h){::SendMessage(h,WM_SETFONT,(WPARAM)font,FALSE);::SetWindowTheme(h,L"DarkMode_Explorer",nullptr);::SetWindowSubclass(h,keyProc,1,(DWORD_PTR)this);}return h;
     }
-    void scrollBy(int amount){RECT r;::GetClientRect(content,&r);offset=std::clamp(offset+amount,0,(std::max)(0,total-(int)(r.bottom-r.top)));::SetScrollPos(content,SB_VERT,offset,TRUE);layoutRows();}
-    void scroll(int command,int thumb){switch(command){case SB_LINEUP:scrollBy(-px(30));break;case SB_LINEDOWN:scrollBy(px(30));break;case SB_PAGEUP:scrollBy(-px(250));break;case SB_PAGEDOWN:scrollBy(px(250));break;case SB_THUMBTRACK:case SB_THUMBPOSITION:{SCROLLINFO s={sizeof(s),SIF_TRACKPOS};::GetScrollInfo(content,SB_VERT,&s);scrollBy(s.nTrackPos-offset);break;}}}
+    void wheel(int delta){wheelRemainder+=delta;int steps=wheelRemainder/WHEEL_DELTA;wheelRemainder%=WHEEL_DELTA;if(steps)scrollBy(-steps*px(90));}
+    void scrollBy(int amount){RECT r;::GetClientRect(content,&r);int next=std::clamp(offset+amount,0,(std::max)(0,total-(int)r.bottom));if(next==offset)return;offset=next;layoutRows();}
+    void scroll(int command,int thumb){switch(command){case SB_LINEUP:scrollBy(-px(30));break;case SB_LINEDOWN:scrollBy(px(30));break;case SB_PAGEUP:scrollBy(-px(250));break;case SB_PAGEDOWN:scrollBy(px(250));break;case SB_TOP:scrollBy(-total);break;case SB_BOTTOM:scrollBy(total);break;case SB_THUMBTRACK:case SB_THUMBPOSITION:{SCROLLINFO s={sizeof(s),SIF_TRACKPOS};::GetScrollInfo(content,SB_VERT,&s);int target=command==SB_THUMBPOSITION?thumb:s.nTrackPos;scrollBy(target-offset);break;}}}
     void layoutRows(){
-        if(!content)return;RECT r;::GetClientRect(content,&r);int width=r.right,split=width*43/100;
-        SCROLLINFO si={sizeof(si),SIF_RANGE|SIF_PAGE|SIF_POS};si.nMin=0;si.nMax=(std::max)(0,total-1);si.nPage=r.bottom;offset=(std::min)(offset,(std::max)(0,total-(int)r.bottom));si.nPos=offset;::SetScrollInfo(content,SB_VERT,&si,TRUE);
+        if(!content||layingOut)return;layingOut=true;RECT r;::GetClientRect(content,&r);int width=r.right,split=width*43/100;
+        SCROLLINFO si={sizeof(si),SIF_RANGE|SIF_PAGE|SIF_POS|SIF_DISABLENOSCROLL};si.nMin=0;si.nMax=(std::max)(0,total-1);si.nPage=r.bottom;offset=(std::min)(offset,(std::max)(0,total-(int)r.bottom));si.nPos=offset;::SetScrollInfo(content,SB_VERT,&si,TRUE);
         ::GetClientRect(content,&r);width=r.right;split=width*43/100;
+        HDWP moves=::BeginDeferWindowPos((int)controls.size()*2);
+        auto place=[&](HWND h,int x,int y,int w,int height){if(moves)moves=::DeferWindowPos(moves,h,nullptr,x,y,(std::max)(1,w),(std::max)(1,height),SWP_NOACTIVATE|SWP_NOZORDER|SWP_NOREDRAW);else ::SetWindowPos(h,nullptr,x,y,(std::max)(1,w),(std::max)(1,height),SWP_NOACTIVATE|SWP_NOZORDER|SWP_NOREDRAW);};
         for(size_t i=0;i<controls.size();++i){const auto& item=items[i];auto& row=controls[i];int y=row.y-offset;
-            if(row.label)::MoveWindow(row.label,px(12),y+px(5),split-px(20),row.height-px(8),TRUE);
+            if(row.label)place(row.label,px(12),y+px(5),split-px(20),row.height-px(8));
             if(row.control){int x=item.kind==dj_settings::Kind::combo?split:px(12);int w=width-x-px(14);int height=item.kind==dj_settings::Kind::combo?px(230):row.height-px(8);
-                ::MoveWindow(row.control,x,y,w,height,TRUE);}
+                place(row.control,x,y,w,height);}
         }
-        ::InvalidateRect(content,nullptr,TRUE);
+        if(moves)::EndDeferWindowPos(moves);layingOut=false;::RedrawWindow(content,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN);
     }
 public:
     DECLARE_WND_CLASS_EX(L"foo_dj_settings_v1",CS_DBLCLKS,(-1))
@@ -73,15 +78,33 @@ public:
         if(m_hWnd&&visible){ShowWindow(SW_SHOW);::SetForegroundWindow(m_hWnd);}
     }
     void close(){if(m_hWnd)DestroyWindow();}
-    void select(int page){selected=std::clamp(page,0,5);offset=0;refresh();}
+    void select(int page){page=std::clamp(page,0,5);if(page==selected&&!controls.empty())return;selected=page;offset=0;refresh();}
+    int scrollOffset()const{return offset;}
+    HWND viewport()const{return content;}
     HWND control(int id)const{return content?::GetDlgItem(content,id):nullptr;}
     void refresh(){
         if(!m_hWnd||!tab||rebuilding)return;rebuilding=true;
-        auto names=dj_settings::tabs(english);::SetWindowTextW(m_hWnd,english?L"DJ Decks — Settings":L"DJ Decks — Réglages");::SetWindowTextW(closeButton,english?L"Close":L"Fermer");
-        TabCtrl_DeleteAllItems(tab);for(auto& name:names){TCITEMW item={TCIF_TEXT};item.pszText=name.data();TabCtrl_InsertItem(tab,TabCtrl_GetItemCount(tab),&item);}TabCtrl_SetCurSel(tab,selected);
+        auto setText=[](HWND h,const std::wstring& text){int length=::GetWindowTextLengthW(h);std::wstring old(length+1,L'\0');::GetWindowTextW(h,old.data(),length+1);old.resize(length);if(old!=text)::SetWindowTextW(h,text.c_str());};
+        auto names=dj_settings::tabs(english);setText(m_hWnd,english?L"DJ Decks — Settings":L"DJ Decks — Réglages");setText(closeButton,english?L"Close":L"Fermer");
+        for(int n=0;n<6;++n){setText(categories[n],names[n]);::InvalidateRect(categories[n],nullptr,FALSE);}
+        auto next=values?values(selected):std::vector<dj_settings::Item>{};
+        bool reuse=next.size()==items.size()&&controls.size()==items.size();
+        if(reuse)for(size_t n=0;n<next.size();++n)if(next[n].id!=items[n].id||next[n].kind!=items[n].kind||next[n].options!=items[n].options){reuse=false;break;}
+        if(reuse){
+            for(size_t n=0;n<next.size();++n){auto& row=controls[n];auto& value=next[n];const auto& old=items[n];
+                if(value.label!=old.label)setText(row.label?row.label:row.control,value.label);
+                if(value.kind==dj_settings::Kind::combo&&value.value!=old.value)::SendMessage(row.control,CB_SETCURSEL,value.value,0);
+                if(value.enabled!=old.enabled)::EnableWindow(row.control,value.enabled);
+                if(value.value!=old.value||value.enabled!=old.enabled)::InvalidateRect(row.control,nullptr,FALSE);
+            }
+            items=std::move(next);rebuilding=false;::RedrawWindow(content,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);::InvalidateRect(m_hWnd,nullptr,FALSE);return;
+        }
+        // Hide intermediate destruction/layout from the renderer; preserve hidden test windows.
+        bool redraw=(::GetWindowLongPtr(content,GWL_STYLE)&WS_VISIBLE)!=0;
+        if(redraw)::SendMessage(content,WM_SETREDRAW,FALSE,0);
         HWND focus=::GetFocus();int focusID=focus?::GetDlgCtrlID(focus):0;
         for(auto& row:controls){if(row.label)::DestroyWindow(row.label);if(row.control)::DestroyWindow(row.control);}controls.clear();
-        items=values?values(selected):std::vector<dj_settings::Item>{};int y=px(10);
+        items=std::move(next);int y=px(10);
         for(auto& item:items){Row row;row.y=y;row.height=px(item.kind==dj_settings::Kind::note?72:46);
             if(item.kind==dj_settings::Kind::combo){row.label=child(L"STATIC",item.label.c_str(),SS_LEFT,0,content);row.control=child(L"COMBOBOX",L"",CBS_DROPDOWNLIST|CBS_HASSTRINGS|WS_VSCROLL|WS_TABSTOP,item.id,content);
                 for(auto& label:item.options)::SendMessageW(row.control,CB_ADDSTRING,0,(LPARAM)label.c_str());::SendMessage(row.control,CB_SETCURSEL,item.value,0);::SendMessage(row.control,CB_SETMINVISIBLE,8,0);
@@ -89,9 +112,9 @@ public:
             else{row.control=child(L"BUTTON",item.label.c_str(),WS_TABSTOP|BS_OWNERDRAW,item.id,content);}
             if(row.control)::EnableWindow(row.control,item.enabled);controls.push_back(row);y+=row.height;
         }
-        total=y;rebuilding=false;layout();if(auto h=control(focusID))::SetFocus(h);::InvalidateRect(m_hWnd,nullptr,TRUE);
+        total=y;layout();if(redraw)::SendMessage(content,WM_SETREDRAW,TRUE,0);rebuilding=false;if(auto h=control(focusID))::SetFocus(h);::RedrawWindow(content,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN);::InvalidateRect(m_hWnd,nullptr,FALSE);
     }
-    void layout(){if(!m_hWnd)return;CRect r;GetClientRect(&r);::MoveWindow(tab,px(12),px(46),r.Width()-px(24),px(36),TRUE);::MoveWindow(content,px(12),px(88),r.Width()-px(24),(std::max)(px(40),r.Height()-px(144)),TRUE);::MoveWindow(closeButton,(std::max)(px(12),r.Width()-px(122)),r.Height()-px(44),px(108),px(30),TRUE);layoutRows();}
+    void layout(){if(!m_hWnd)return;CRect r;GetClientRect(&r);::MoveWindow(content,px(12),px(88),r.Width()-px(24),(std::max)(px(40),r.Height()-px(144)),FALSE);::MoveWindow(closeButton,(std::max)(px(12),r.Width()-px(122)),r.Height()-px(44),px(108),px(30),FALSE);for(int n=0;n<6;++n){int width=r.Width()-px(24);::MoveWindow(categories[n],px(12)+width*n/6,px(46),(width*(n+1)/6-width*n/6)-px(3),px(34),FALSE);}layoutRows();}
     BEGIN_MSG_MAP_EX(DjSettingsWindow)
         MSG_WM_CREATE(OnCreate)
         MSG_WM_DESTROY(OnDestroy)
@@ -106,13 +129,16 @@ public:
         MESSAGE_HANDLER(WM_CTLCOLOREDIT,OnColor)
         MESSAGE_HANDLER(WM_CTLCOLORLISTBOX,OnColor)
         MESSAGE_HANDLER(WM_DRAWITEM,OnDraw)
+        MESSAGE_HANDLER(WM_MOUSEWHEEL,OnWheel)
         MESSAGE_HANDLER(WM_GETMINMAXINFO,OnMinMax)
     END_MSG_MAP()
+    LRESULT OnWheel(UINT,WPARAM w,LPARAM,BOOL&){wheel(GET_WHEEL_DELTA_WPARAM(w));return 0;}
     int OnCreate(LPCREATESTRUCT){
         INITCOMMONCONTROLSEX init={sizeof(init),ICC_TAB_CLASSES|ICC_STANDARD_CLASSES};::InitCommonControlsEx(&init);
         font=::CreateFontW(-px(14),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");background=::CreateSolidBrush(RGB(17,21,27));field=::CreateSolidBrush(RGB(29,35,44));
-        tab=child(WC_TABCONTROLW,L"",WS_TABSTOP|TCS_OWNERDRAWFIXED|TCS_FIXEDWIDTH,10,m_hWnd);TabCtrl_SetItemSize(tab,px(96),px(30));
-        content=::CreateWindowExW(WS_EX_CONTROLPARENT,L"STATIC",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|WS_CLIPCHILDREN,0,0,1,1,m_hWnd,nullptr,::GetModuleHandle(nullptr),nullptr);::SetWindowSubclass(content,contentProc,1,(DWORD_PTR)this);
+        tab=m_hWnd;for(int n=0;n<6;++n)categories[n]=child(L"BUTTON",L"",WS_TABSTOP|BS_OWNERDRAW,20+n,m_hWnd);
+        WNDCLASSEXW scrollClass={sizeof(scrollClass)};scrollClass.lpfnWndProc=::DefWindowProcW;scrollClass.hInstance=::GetModuleHandle(nullptr);scrollClass.lpszClassName=L"DJDecks_SettingsViewport_v2";::RegisterClassExW(&scrollClass);
+        content=::CreateWindowExW(WS_EX_CONTROLPARENT,L"DJDecks_SettingsViewport_v2",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|WS_CLIPCHILDREN,0,0,1,1,m_hWnd,nullptr,::GetModuleHandle(nullptr),nullptr);::SetWindowSubclass(content,contentProc,1,(DWORD_PTR)this);
         closeButton=child(L"BUTTON",L"",WS_TABSTOP|BS_OWNERDRAW,1,m_hWnd);
         using Dark=HRESULT(WINAPI*)(HWND,DWORD,LPCVOID,DWORD);HMODULE dwm=::LoadLibraryW(L"dwmapi.dll");if(dwm){auto fn=(Dark)::GetProcAddress(dwm,"DwmSetWindowAttribute");BOOL dark=TRUE;if(fn)fn(m_hWnd,20,&dark,sizeof(dark));::FreeLibrary(dwm);}
         refresh();return 0;
@@ -123,7 +149,9 @@ public:
     BOOL OnErase(CDCHandle){return TRUE;}
     void OnPaint(CDCHandle){CPaintDC dc(m_hWnd);CRect r;GetClientRect(&r);dc.FillRect(r,background);auto old=dc.SelectFont(font);dc.SetBkMode(TRANSPARENT);dc.SetTextColor(accent);CRect title(px(18),px(10),r.right-px(16),px(40));dc.DrawText(english?L"DJ Decks settings":L"Réglages DJ Decks",-1,title,DT_SINGLELINE|DT_VCENTER);dc.SetTextColor(RGB(175,188,200));CRect hint(px(18),r.bottom-px(46),r.right-px(136),r.bottom-px(10));dc.DrawText(english?L"Changes apply immediately.":L"Modifications appliquées immédiatement.",-1,hint,DT_WORDBREAK);dc.SelectFont(old);}
     LRESULT OnNotify(UINT,WPARAM,LPARAM l,BOOL& handled){auto n=(NMHDR*)l;if(n->hwndFrom==tab&&n->code==TCN_SELCHANGE){selected=TabCtrl_GetCurSel(tab);offset=0;refresh();return 0;}handled=FALSE;return 0;}
-    LRESULT OnCommand(UINT,WPARAM w,LPARAM l,BOOL&){int id=LOWORD(w),code=HIWORD(w);if(id==1){OnClose();return 0;}if(rebuilding)return 0;
+    LRESULT OnCommand(UINT,WPARAM w,LPARAM l,BOOL&){int id=LOWORD(w),code=HIWORD(w);if(id==1){OnClose();return 0;}if(id>=20&&id<26&&code==BN_CLICKED){select(id-20);return 0;}
+        if(id>=1900&&id<1905&&code==BN_CLICKED){if(::MessageBoxW(m_hWnd,english?L"Restore this category's defaults? Tracks, playlists, positions, loop points and cache files are preserved.":L"Rétablir les valeurs par défaut de cette catégorie ? Morceaux, playlists, positions, points de boucle et fichiers du cache sont conservés.",english?L"Reset to defaults":L"Valeurs par défaut",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)!=IDYES)return 0;}
+        if(rebuilding)return 0;
         for(const auto& item:items)if(item.id==id&&item.enabled){bool combo=item.kind==dj_settings::Kind::combo;if((combo&&code!=CBN_SELCHANGE)||(!combo&&code!=BN_CLICKED)||item.kind==dj_settings::Kind::note)return 0;
             int value=combo?(int)::SendMessage((HWND)l,CB_GETCURSEL,0,0):item.kind==dj_settings::Kind::toggle?(item.value?0:1):0;
             auto callback=changed;if(callback)callback(id,value);if(m_hWnd)refresh();return 0;
@@ -133,6 +161,7 @@ public:
     LRESULT OnDraw(UINT,WPARAM,LPARAM l,BOOL& handled){
         auto d=(DRAWITEMSTRUCT*)l;
         if(d->CtlType==ODT_BUTTON){
+            if(d->CtlID>=20&&d->CtlID<26){bool active=int(d->CtlID)-20==selected;dj_skin::surface(d->hDC,d->rcItem,accent,false,active,(d->itemState&ODS_SELECTED)!=0);auto old=::SelectObject(d->hDC,font);::SetBkMode(d->hDC,TRANSPARENT);::SetTextColor(d->hDC,active?accent:RGB(224,232,240));wchar_t text[64]={};::GetWindowTextW(d->hwndItem,text,64);RECT area=d->rcItem;::DrawTextW(d->hDC,text,-1,&area,DT_CENTER|DT_VCENTER|DT_SINGLELINE);if(d->itemState&ODS_FOCUS){::InflateRect(&area,-4,-4);::DrawFocusRect(d->hDC,&area);}::SelectObject(d->hDC,old);return TRUE;}
             const dj_settings::Item* entry=nullptr;for(const auto& item:items)if(item.id==(int)d->CtlID){entry=&item;break;}
             bool close=d->hwndItem==closeButton;if(!entry&&!close){handled=FALSE;return 0;}
             bool enabled=close||entry->enabled,toggle=entry&&entry->kind==dj_settings::Kind::toggle,checked=entry&&entry->value!=0;
@@ -150,3 +179,5 @@ public:
     }
     LRESULT OnMinMax(UINT,WPARAM,LPARAM l,BOOL&){auto info=(MINMAXINFO*)l;info->ptMinTrackSize={px(640),px(400)};return 0;}
 };
+
+

@@ -44,6 +44,7 @@ try {
     Add-File $zip (Join-Path $repo 'docs/SETTINGS.md') 'SETTINGS.md'
     Add-File $zip (Join-Path $repo 'docs/SESSION_FILES.md') 'SESSION_FILES.md'
     Add-File $zip (Join-Path $repo 'docs/TOOLTIPS.md') 'TOOLTIPS.md'
+    Add-File $zip (Join-Path $repo 'docs/FABCORE_FIXES.fr.md') 'FABCORE_FIXES.fr.md'
     Add-File $zip (Join-Path $repo 'docs/BPM_ANALYSERS.md') 'BPM_ANALYSERS.md'
     Add-File $zip (Join-Path $repo 'docs/MASTER_LIMITER.fr.md') 'MASTER_LIMITER.fr.md'
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repo 'stems') -File) { Add-File $zip $file.FullName ('stems/'+$file.Name) }

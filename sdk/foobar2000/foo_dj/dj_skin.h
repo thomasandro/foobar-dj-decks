@@ -4,6 +4,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <memory>
+#include <vector>
+#include <cstring>
+#pragma comment(lib,"msimg32.lib")
 #pragma comment(lib,"gdiplus.lib")
 namespace dj_skin {
 inline std::atomic<bool> flat{false};
@@ -22,15 +26,8 @@ inline void rounded(Gdiplus::GraphicsPath& p,Gdiplus::RectF r,float radius) {
     p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.GetRight()-d,r.Y,d,d,270,90);
     p.AddArc(r.GetRight()-d,r.GetBottom()-d,d,d,0,90);p.AddArc(r.X,r.GetBottom()-d,d,d,90,90);p.CloseFigure();
 }
-inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bool active=false,bool pressed=false) {
-    if(rect.right-rect.left<2 || rect.bottom-rect.top<2 || !::RectVisible(dc,&rect)) return;
-    if(flat.load()){
-        COLORREF fill=casing?RGB(22,27,34):pressed?RGB(12,16,22):active?RGB(49,57,68):RGB(30,36,45);
-        HBRUSH brush=CreateSolidBrush(fill);FillRect(dc,&rect,brush);DeleteObject(brush);
-        brush=CreateSolidBrush(casing||active?accent:RGB(65,75,88));FrameRect(dc,&rect,brush);
-        if(casing){RECT top=rect;top.bottom=top.top+3;FillRect(dc,&top,brush);}DeleteObject(brush);return;
-    }
-    ready(); Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+inline void drawGloss(Gdiplus::Graphics& g,const RECT& rect,COLORREF accent,bool casing,bool active,bool pressed){
+g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     Gdiplus::RectF r((float)rect.left+2,(float)rect.top+1,(float)(rect.right-rect.left)-5,(float)(rect.bottom-rect.top)-5);
     Gdiplus::GraphicsPath shadow;auto sr=r;sr.Y+=3;rounded(shadow,sr,casing?19.f:9.f);
     Gdiplus::SolidBrush shade(Gdiplus::Color(170,0,0,0));g.FillPath(&shade,&shadow);
@@ -54,7 +51,40 @@ inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bo
     g.Restore(saved);
     Gdiplus::Pen highlight(Gdiplus::Color(casing?180:105,255,255,255),1.f);
     g.DrawLine(&highlight,r.X+8,r.Y+3,r.GetRight()-8,r.Y+3);
+ }
+struct SurfaceEntry{
+ int width=0,height=0;COLORREF accent=0;bool casing=false,active=false,pressed=false;HBITMAP bitmap=nullptr;HDC dc=nullptr;HGDIOBJ old=nullptr;
+ ~SurfaceEntry(){if(dc){if(old)::SelectObject(dc,old);::DeleteDC(dc);}if(bitmap)::DeleteObject(bitmap);}
+};
+struct SurfaceCache{std::vector<std::unique_ptr<SurfaceEntry>> entries;size_t bytes=0,hits=0,renders=0;};
+inline SurfaceCache& surfaceCache(){static thread_local SurfaceCache cache;return cache;}
+inline void surface(HDC dc,const RECT& rect,COLORREF accent,bool casing=false,bool active=false,bool pressed=false){
+ int w=rect.right-rect.left,h=rect.bottom-rect.top;if(w<2||h<2||!::RectVisible(dc,&rect))return;
+    if(flat.load()){
+        COLORREF fill=casing?RGB(22,27,34):pressed?RGB(12,16,22):active?RGB(49,57,68):RGB(30,36,45);
+        HBRUSH brush=CreateSolidBrush(fill);FillRect(dc,&rect,brush);DeleteObject(brush);
+        brush=CreateSolidBrush(casing||active?accent:RGB(65,75,88));FrameRect(dc,&rect,brush);
+        if(casing){RECT top=rect;top.bottom=top.top+3;FillRect(dc,&top,brush);}DeleteObject(brush);return;
+    }
+
+ ready();auto& cache=surfaceCache();SurfaceEntry* found=nullptr;
+ for(auto& e:cache.entries)if(e->width==w&&e->height==h&&e->accent==accent&&e->casing==casing&&e->active==active&&e->pressed==pressed){found=e.get();++cache.hits;break;}
+ constexpr size_t budget=16*1024*1024;const size_t bytes=size_t(w)*size_t(h)*4;
+ if(!found&&bytes<=budget/2&&w<=4096&&h<=4096){
+  while(!cache.entries.empty()&&(cache.bytes+bytes>budget||cache.entries.size()>=96)){auto& first=cache.entries.front();cache.bytes-=size_t(first->width)*first->height*4;cache.entries.erase(cache.entries.begin());}
+  auto entry=std::make_unique<SurfaceEntry>();entry->width=w;entry->height=h;entry->accent=accent;entry->casing=casing;entry->active=active;entry->pressed=pressed;
+  BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;void* pixels=nullptr;
+  entry->dc=::CreateCompatibleDC(dc);entry->bitmap=::CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
+  if(entry->dc&&entry->bitmap&&pixels){entry->old=::SelectObject(entry->dc,entry->bitmap);
+   Gdiplus::Bitmap image(w,h,PixelFormat32bppPARGB);{Gdiplus::Graphics graphics(&image);graphics.Clear(Gdiplus::Color(0,0,0,0));RECT local={0,0,w,h};drawGloss(graphics,local,accent,casing,active,pressed);}
+   Gdiplus::Rect area(0,0,w,h);Gdiplus::BitmapData data={};
+   if(image.LockBits(&area,Gdiplus::ImageLockModeRead,PixelFormat32bppPARGB,&data)==Gdiplus::Ok){for(int y=0;y<h;++y)std::memcpy((BYTE*)pixels+size_t(y)*w*4,(BYTE*)data.Scan0+ptrdiff_t(y)*data.Stride,size_t(w)*4);image.UnlockBits(&data);found=entry.get();cache.bytes+=bytes;++cache.renders;cache.entries.push_back(std::move(entry));}
+  }
+ }
+ if(found){BLENDFUNCTION blend={AC_SRC_OVER,0,255,AC_SRC_ALPHA};if(::AlphaBlend(dc,rect.left,rect.top,w,h,found->dc,0,0,w,h,blend))return;}
+ Gdiplus::Graphics graphics(dc);drawGloss(graphics,rect,accent,casing,active,pressed);
 }
+
 enum class Icon { play,pause,start,pulse,keySearch,refresh,left,right,anchor,automatic,lock,unlock,beat,bpm,keyMatch,both,swap,speaker,release,settings,headphones,stop };
 inline void icon(HDC dc,const RECT& rect,Icon kind,COLORREF ink=RGB(239,243,247)) {
     const int width=rect.right-rect.left,height=rect.bottom-rect.top;

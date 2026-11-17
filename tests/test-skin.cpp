@@ -64,6 +64,10 @@ int wmain(int argc,wchar_t** argv) {
     dj_skin::surface(dc,stateRect,RGB(0,194,211),false,true,true);GdiFlush();
     std::vector<unsigned char> pressed((unsigned char*)pixels,(unsigned char*)pixels+1100*44*4);
     assert(normal!=hover && hover!=pressed && normal!=pressed);
+    auto& cache=dj_skin::surfaceCache();auto rendered=cache.renders,hit=cache.hits;
+    for(int n=0;n<1000;++n)dj_skin::surface(dc,stateRect,RGB(0,194,211));
+    assert(cache.renders==rendered&&cache.hits>=hit+1000&&cache.bytes<=16*1024*1024);
+    for(int n=0;n<180;++n){RECT resized={0,0,65+n,44};dj_skin::surface(dc,resized,RGB(n,80,90));}assert(cache.entries.size()<=96&&cache.bytes<=16*1024*1024);
     for(int n=0;n<8;++n){dj_skin::colorIndex[0]=n;dj_skin::colorIndex[1]=7-n;assert(dj_skin::accent(0)==dj_skin::palette[n]&&dj_skin::accent(1)==dj_skin::palette[7-n]);}
     dj_skin::colorIndex[0]=0;dj_skin::colorIndex[1]=1;dj_skin::flat=true;
     dj_skin::surface(dc,stateRect,RGB(0,194,211));GdiFlush();auto flatPixel=GetPixel(dc,30,15);

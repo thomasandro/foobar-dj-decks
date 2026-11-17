@@ -33,6 +33,7 @@
 #include "auto_mix.h"
 #include "master_limiter.h"
 #include "bpm_provider.h"
+#include "output_rate.h"
 #include "queue_window.h"
 #include "settings_window.h"
 #include "tooltip_policy.h"
@@ -80,6 +81,7 @@ namespace {
     static cfg_int cfg_colorA({0x49961561,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},0);
     static cfg_int cfg_colorB({0x49961562,0xb69e,0x4070,{0xa7,0x31,0x15,0x7c,0xc8,0xa2,0x43,0x21}},1);
     static cfg_int cfg_replaygain({0xa660da20,0x74ab,0x44f7,{0x95,0x4a,0x62,0xc3,0x92,0x13,0x51,0x03}},0);
+    static cfg_int cfg_outputRate({0x6139a004,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x04}},0);
     static cfg_int cfg_bpmProvider({0x6139a003,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x03}},0);
     static cfg_int cfg_masterLimiter({0x6139a001,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x01}},1);
     static cfg_int cfg_masterCeiling({0x6139a002,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x02}},-10);
@@ -505,9 +507,9 @@ namespace {
 		DECLARE_WND_CLASS_EX(TEXT("{3E9B6D14-2A7C-4F58-B1D6-8A4C05E7D932}"), CS_VREDRAW | CS_HREDRAW, (-1));
 
 		void initialize_window(HWND parent) {
-			m_limitEnabled=cfg_masterLimiter.get()!=0;m_limitCeiling=std::clamp(double(cfg_masterCeiling.get()),-120.,-1.)/10.;
+			m_outputRatePreference=cfg_outputRate.get();m_limitEnabled=cfg_masterLimiter.get()!=0;m_limitCeiling=std::clamp(double(cfg_masterCeiling.get()),-120.,-1.)/10.;
             WIN32_OP(Create(parent) != NULL);
-			SetTimer(kTimerId, 16);    // ~60 images par seconde, pour un defilement fluide de la forme d'onde
+			SetTimer(kTimerId, 33);    // Cap UI animation at 30 fps; audio clocks are independent.
 			RegisterDrop();            // le panneau accepte les morceaux glisses dessus
 			PostMessage(kRestoreMessage); // one restoration after window creation, no watcher
 		}
@@ -616,14 +618,14 @@ namespace {
 		// On ne redessine vite que si quelque chose bouge (lecture, curseur deplace) ; au repos, 4 fois par seconde.
 		void OnTimer(UINT_PTR id) {
             PreparationTick();PreviewTick();ScrobbleTick();StemsTick();AutomationTick();
-			if (m_cachePlaying[0] || m_cachePlaying[1] || m_drag != 0) { Invalidate(); return; }
+			if (m_cachePlaying[0] || m_cachePlaying[1] || m_drag != 0 || m_dragDirty) { m_dragDirty=false;Invalidate(FALSE); return; }
 			CRect client; GetClientRect(&client);
 			for (int i = 0; i < 2; ++i) {
 				const auto layout = MakeLayout(i, client);
 				if (m_scrollActive[i][0]) InvalidateRect(&layout.name, FALSE);
 				if (m_scrollActive[i][1]) InvalidateRect(&layout.artist, FALSE);
 			}
-			if ((++m_idleTicks % 15) == 0) Invalidate();
+			if ((++m_idleTicks % 8) == 0) Invalidate();
 		}
 		void OnDestroy();
 
@@ -893,7 +895,8 @@ namespace {
 		double m_trueElapsed[2] = { 0.0, 0.0 };   // position reelle lue dans le moteur (par a-coups)
 		                                          // (m_cacheElapsed = position affichee, lissee)
 		ULONGLONG m_lastPaintTick = 0;            // heure du dernier dessin, pour lisser le defilement
-		int m_idleTicks = 0;
+		bool m_dragDirty=false;
+        int m_idleTicks = 0;
 		bool m_scrollActive[2][2] = {};
 		ULONGLONG m_scrollStart[2][2] = {};
 		int m_scrollWidth[2][2] = {};
@@ -911,7 +914,8 @@ namespace {
 		unsigned m_outRate = 48000;   // frequence envoyee a la sortie audio
 
 		// --- Valeurs atomiques lues par le moteur sans verrou ---
-		std::atomic<bool> m_limitEnabled{true};
+		std::atomic<unsigned> m_outputRatePreference{0};
+        std::atomic<bool> m_limitEnabled{true};
         std::atomic<double> m_limitCeiling{-1},m_masterPeak{0},m_limitReduction{0};
         std::atomic<ULONGLONG> m_masterClipUntil{0},m_masterLimitUntil{0};
         std::atomic<float> m_crossfade{ 0.5f };   // position du crossfader : 0 = deck A seul, 1 = deck B seul
@@ -983,7 +987,7 @@ namespace {
 		double t = (right > left) ? (double)(x - left) / (double)(right - left) : 0.5;
 		t = (std::min)(1.0, (std::max)(0.0, t));
 		m_crossfade = (float)t;
-		Invalidate();
+		m_dragDirty=true;
 	}
 
 	// Place le volume d'un deck selon la position y de la souris (en bas = 0, en haut = 1).
@@ -993,7 +997,7 @@ namespace {
 		double v = (bottom > top) ? (double)(bottom - y) / (double)(bottom - top) : 1.0;
 		v = (std::min)(1.0, (std::max)(0.0, v));
 		m_volume[deck] = (float)v;
-		Invalidate();
+		m_dragDirty=true;
 	}
 
 	// Fenetre visible de la forme d'onde : debut (t0) et duree (width), en secondes.
@@ -1311,7 +1315,7 @@ namespace {
             add(L.headphones,L"Préécoute casque avant volume/crossfader. Le deck doit jouer ; couper sa contribution au mix avec le crossfader si nécessaire. Sortie et volume dans Réglages → Préécoute casque.",L"Headphone cue before deck volume/crossfader. The deck must play; use the crossfader to keep it out of the master if needed. Output and volume in Settings → Headphone cue.");
             add(L.automation,L"Lecture automatique : enchaînement de cette liste, alternance A/B, durée et courbe du fondu.",L"Automatic playback: this playlist, alternating A/B, fade duration and curve.");
             add(L.queueOpen,L"Ouvrir la liste de cette platine : glisser des morceaux, reordonner, supprimer. Double-clic pour charger.",L"Open this deck's playlist: drop tracks, reorder, remove. Double-click to load.");
-            add(L.release,L"Arr\u00eater et lib\u00e9rer le fichier. Position conserv\u00e9e ; Lecture reprend au m\u00eame endroit. Lib\u00e8re aussi l'autre platine si elle utilise ce fichier.",L"Stop and release the file. Retains position; Play resumes there. Also releases the other deck if it uses this file.");
+            add(L.release,L"D\u00e9charger : arr\u00eater et fermer le fichier. Position conserv\u00e9e ; Lecture reprend au m\u00eame endroit. Lib\u00e8re aussi l'autre platine si elle utilise ce fichier.",L"Unload: stop and close the file. Retains position; Play resumes there. Also releases the other deck if it uses this file.");
             add(L.analyse[0],L"Calculer le BPM avec l’analyseur choisi dans Réglages → Audio (Auto : Smart Tempo puis foo_bpm). La platine est mise en pause et le fichier lib\u00e9r\u00e9 pour enregistrer les tags. Reprendre apr\u00e8s validation.",L"Calculate BPM using Settings → Audio analyser (Auto: Smart Tempo, then foo_bpm). Pauses and releases the file for tag writing. Resume after saving the result.");
             add(L.analyse[1],L"Calculer la tonalit\u00e9 avec foo_musical_key. Reprendre la lecture apr\u00e8s la fin de l'analyse et l'enregistrement des tags.",L"Calculate key using foo_musical_key. Resume after analysis and tag writing have finished.");
             add(L.analyse[2],L"Actualiser les tags : relire le BPM et la tonalit\u00e9 et afficher les valeurs. Ne lance pas d'analyse audio.",L"Refresh tags: read BPM and key and show their values. Does not analyse audio.");
@@ -2805,7 +2809,7 @@ namespace {
              m_deck[1-deck].playing=false;m_crossfade=(float)deck;}
             // Released files remain released; opt-in must not reopen a file being tagged.
             if(m_altAvailable[0]&&m_altAvailable[1])m_alternate=true;
-            else MessageBox(en?L"Load a playable track on each deck first. Released files must be resumed explicitly.":L"Chargez un morceau lisible sur chaque platine. Reprenez explicitement les fichiers libérés.",L"DJ Decks",MB_OK|MB_ICONINFORMATION);
+            else MessageBox(en?L"Load a playable track on each deck first. Unloaded files must be resumed explicitly.":L"Chargez un morceau lisible sur chaque platine. Reprenez explicitement les fichiers libérés.",L"DJ Decks",MB_OK|MB_ICONINFORMATION);
         }
         if(choice>=100&&choice<110)m_fadeSeconds=seconds[choice-100];
         if(choice==200||choice==201)m_linearFade=choice==201;
@@ -3246,6 +3250,9 @@ namespace {
             combo(1100,text(L"Couleur de la platine A",L"Deck A color"),colors,dj_skin::colorIndex[0].load());combo(1120,text(L"Couleur de la platine B",L"Deck B color"),colors,dj_skin::colorIndex[1].load());
             note(text(L"Les couleurs et le thème s’appliquent aux platines et à leurs playlists. Les infobulles suivent la langue choisie.",L"Decks and playlists share colors/theme. Tooltips follow the selected language."));
         }else if(page==1){
+            const unsigned rates[]={0,44100,48000,96000,192000};int rateIndex=0;for(int n=0;n<5;++n)if(m_outputRatePreference.load()==rates[n])rateIndex=n;
+            combo(1240,text(L"Fréquence du mix principal",L"Master sample rate"),{text(L"Auto : fréquence du premier morceau",L"Auto: first playing track"),L"44100 Hz",L"48000 Hz",L"96000 Hz",L"192000 Hz"},rateIndex);
+            note(text(L"La fréquence imposée par la sortie reste prioritaire. Auto suit le premier morceau au démarrage du moteur, puis reste fixe. Une modification s’applique au prochain redémarrage de foobar.",L"A rate forced by the output has priority. Auto follows the first track at engine start, then remains fixed. Changes apply after restarting foobar."));
             combo(1230,text(L"Analyseur BPM",L"BPM analyser"),{text(L"Automatique : Smart Tempo puis foo_bpm",L"Auto: Smart Tempo, then foo_bpm"),L"foo_smart_tempo",L"foo_bpm"},std::clamp(int(cfg_bpmProvider.get()),0,2));
             note(text(L"Analyse externe facultative sur le morceau chargé. Conserver BPM comme nom du tag dans l’analyseur. Valider/enregistrer le résultat puis Actualiser les tags ; reprendre la lecture manuellement.",L"Optional external analysis of the loaded track. Keep BPM as the analyser's output tag. Save the result, then Refresh tags; resume playback manually."));
             toggle(1220,text(L"Limiteur du mix principal",L"Master output limiter"),m_limitEnabled.load());
@@ -3283,13 +3290,28 @@ namespace {
             if(selected<0){thresholds.push_back(std::to_wstring(cfg_trimDb.get())+L" dBFS");selected=8;}combo(1512,text(L"Seuil de silence",L"Silence threshold"),thresholds,selected);
             note(text(L"Silences : appliqués aux prochains chargements, avec préchargement du suivant en AUTO. Activer Q recale aussi les points existants sur la grille affichée. Choisir le mode AUTO sur chaque deck.",L"Silence options apply to new loads; AUTO preloads the next track. Enabling Q also snaps existing points to the displayed grid. Select AUTO modes on each deck."));
         }else if(page==5){action(200,text(L"Taille et nettoyage du cache des stems…",L"Stem cache size and cleanup…"));note(text(L"Les stems restent expérimentaux. Le gestionnaire affiche la taille et permet de vider les entrées inutilisées en conservant celles qui sont actives ou en préparation. Les morceaux source sont préservés.",L"Stems remain experimental. The cache manager shows size and removes unused entries while retaining active/preparing stems. Source music is preserved."));note(text(L"Moteur local facultatif : accélération NVIDIA CUDA automatique, sinon CPU. Préparation, volumes et solos restent accessibles sur chaque deck.",L"Optional local engine: automatic NVIDIA CUDA acceleration with CPU fallback. Preparation, volume and solo controls remain on each deck."));}
+        if(page>=0&&page<5)action(1900+page,text(L"Rétablir les valeurs par défaut de cette catégorie…",L"Reset this category to defaults…"));
         return out;
     }
     void CDjPanel::SettingsChanged(int id,int value){
+        if(id>=1900&&id<1905){
+            // Reuse the normal setters so persisted and live values stay in sync.
+            // Language, loaded media, transport and loop points are intentionally retained.
+            const std::vector<std::vector<std::pair<int,int>>> defaults={
+                {{1010,0},{1100,0},{1120,1}},
+                {{1240,0},{1230,0},{1220,1},{1221,1},{1210,0},{220,0}},
+                {{1400,0},{1402,25},{1403,0}},
+                {{1300,0},{305,0}},
+                {{1500,4},{1501,0},{1502,0},{1503,0},{1510,0},{1511,0},{1512,4}}
+            };
+            for(const auto& setting:defaults[id-1900])SettingsChanged(setting.first,setting.second);
+            return;
+        }
         if(id==1604)DistributeActivePlaylist();else if(id==1600||id==1601)ExportBundle(id==1601);else if(id==1602||id==1603)ImportBundle(id==1603);
         else if(id==1000)SettingsCommand(1+value);else if(id==1010)SettingsCommand(10+value);else if(id==1100)SettingsCommand(100+value);else if(id==1120)SettingsCommand(120+value);else if(id==1210)SettingsCommand(210+value);else if(id==1300)SettingsCommand(value==4?304:300+value);
         else if(id==220){if((value!=0)!=g_scrobble.load())SettingsCommand(220);}else if(id==305){if((value!=0)!=(cfg_queueNumbers.get()!=0))SettingsCommand(305);}
         else if(id==200||id==221||id==304||id==306)SettingsCommand(id);
+        else if(id==1240){const unsigned rates[]={0,44100,48000,96000,192000};if(value>=0&&value<5){cfg_outputRate=rates[value];m_outputRatePreference=rates[value];}}
         else if(id==1230){cfg_bpmProvider=std::clamp(value,0,2);}
         else if(id==1220){m_limitEnabled=value!=0;cfg_masterLimiter=value?1:0;}
         else if(id==1221){const int ceilings[]={-3,-10,-30,-60};if(value>=0&&value<4){cfg_masterCeiling=ceilings[value];m_limitCeiling=ceilings[value]/10.;}}
@@ -3358,7 +3380,9 @@ namespace {
 
 			// Frequence imposee par la sortie (sinon 48000 Hz). Elle ne changera plus jamais ensuite.
 			const unsigned forcedRate = out->get_forced_sample_rate_();
-			const unsigned outRate = forcedRate ? forcedRate : 48000;
+			unsigned sourceRate=0;
+            {std::lock_guard<std::mutex> lock(m_lock);for(auto& deck:m_deck)if(deck.playing&&deck.sourceRate){sourceRate=deck.sourceRate;break;}if(!sourceRate)for(auto& deck:m_deck)if(deck.loaded&&deck.sourceRate){sourceRate=deck.sourceRate;break;}}
+            const unsigned outRate = dj_output::rate(forcedRate,m_outputRatePreference.load(),sourceRate);
 			{
 				std::lock_guard<std::mutex> lock(m_lock);
                 const unsigned previousRate=m_outRate?m_outRate:48000;

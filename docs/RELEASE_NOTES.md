@@ -1,19 +1,14 @@
-# DJ Decks 0.40.0-beta.1 — 2026-11-16
+# DJ Decks 0.40.3-beta.1 — corrections and settings improvements (x64 / x86)
 
-Beta for foobar2000 2.x / Default UI, x64 and x86. Choose the package matching foobar's architecture.
+Thanks to StyxCrosser and Fabcore for their testing and reports.
 
-## New since 0.38.1
+- Auto master sample rate now follows the first playing track at engine start instead of an unconditional 48 kHz fallback. Settings → Audio offers Auto / 44.1 / 48 / 96 / 192 kHz; restart foobar after changing it. A rate forced by the output takes priority.
+- Corrected settings scrollbar and wheel routing, including fractional wheel input over closed combo boxes.
+- Bounded glossy-surface cache and 30 fps animation with coalesced volume/crossfader repaints, intended to reduce UI CPU cost.
+- Unload replaces Release; retained position and resume behavior are unchanged.
+- Settings category buttons follow the selected Glossy/Flat theme and deck A accent. Confirmed per-category defaults preserve tracks, playlist contents, positions, loop points and cache files; language is retained.
+- Settings option updates retain existing controls where possible; category rebuilds batch repaint to reduce flicker.
 
-- Master sample-peak limiter, enabled by default at -1 dBFS. Settings → Audio: bypass or -0.3 / -1 / -3 / -6 dBFS ceilings. Stereo-linked immediate attack and 80 ms release, without added lookahead latency. Processes the main mix after crossfader/volume/ReplayGain and original/stem mixing; headphone cue and previews remain independent.
-- Master output peak bar beside the crossfader. Green LIM: active; amber and negative dB: gain reduction (350 ms visual hold); grey LIM OFF: bypass; red CLIP: sample overload with bypass or invalid input (one second hold). Invalid samples are sanitized in either mode.
-- Escape hides either floating playlist, including with button focus; during a drag gesture it cancels the gesture first. Lists and playback are retained.
-- Empty list / Vider la liste: confirmation before clearing the entire selected deck queue, even with no selected rows. It keeps music files and the loaded track, stops that deck's AUTO/preload and preview plus A/B alternation, preserves the other queue, and saves the empty list. Export a session before clearing if you want a backup; there is no dedicated undo for clear.
-- Settings → Audio → BPM analyser: Auto / foo_smart_tempo / foo_bpm. Auto prefers Smart Tempo's registered analysis command, otherwise foo_bpm. Explicit selection never silently changes provider. The file is released before dispatch, preserving subsong and existing tag-writing workflow. Keep BPM as the analyser's output tag, save/validate the result, Refresh tags and manually resume the deck. Key analysis is unchanged.
+The installed x64 release works on my setup. **I have not tested this release in x86 foobar.** Both full native test suites pass, but Fabcore’s output-device, scrolling and CPU retest is still needed. No real-host CPU benchmark is claimed. Stems remain experimental.
 
-## Validation and limits
-
-The installed x64 version is user-confirmed. Both builds pass native regression suites, including limiter impulses/rates/stereo/bypass/release, actual analyser dispatch with mock services, clear/cancel behavior and hidden playlist/settings/tooltips tests. No live x86 foobar host loading is claimed. Actual Smart Tempo execution/tag writing with installed releases is not established by simulated-service tests; versions lacking the expected public command report unavailable. No analyser code or binary is bundled or installed.
-
-The limiter controls sample peaks, not intersample/true peaks, headphones or downstream device processing; sustained heavy limiting may audibly pump/distort. It is not loudness normalization. Stems remain experimental and offline-prepared, with an optional Python/PyTorch engine requiring 64-bit Windows even with foobar x86. Beat/grid alignment remains experimental; loops may click at edges. Profile limiter/provider choices are independent of session files.
-
-[Changelog including unpublished 0.39.0](../CHANGELOG.md) · [Limiter guide](MASTER_LIMITER.fr.md) · [BPM analysers](BPM_ANALYSERS.md)
+[Detailed changelog](../CHANGELOG.md) · [Download](https://github.com/thomasandro/foobar-dj-decks/releases/tag/v0.40.3-beta.1)

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.40.3-beta.1 — 2026-11-17 (public prerelease, x64 / x86)
+
+Public release combining the previously unpublished 0.40.1 and 0.40.2 milestones below. The owner confirms the installed x64 release working. Both full native suites pass; the owner has not tested this release in x86 foobar. Fabcore’s actual output-device and UI/CPU retest remains necessary. Thanks to StyxCrosser and Fabcore for the reports and suggestions.
+
+- Reduce settings flicker: update values, enabled state and labels in existing controls when the row schema is unchanged instead of destroying/recreating the entire page after every option selection. Keep combo HWNDs and scroll position stable.
+- Batch category rebuilds with viewport redraw suspended until controls are created and laid out. Remove synchronous per-window layout repaint and redundant category pressed-state updates; avoid background erasure on incremental updates. Selecting the current category leaves the page intact.
+- Regression checks retain control handles and selected values across a theme change and repeated category selection, in addition to existing scrolling, bilingual settings and lifecycle tests. No real foobar window was observed; visible flicker reduction remains to be confirmed by the user.
+
+## 0.40.2-beta.1 — previously unpublished development milestone (x64 / x86)
+
+- Rename the deck file-close action to Unload (Décharger), including its tooltip and stem-cache guidance. Preserve the existing resume position and shared-file handling.
+- Replace the native settings tab strip with six keyboard-accessible themed category buttons, using the same cached Glossy / Flat surfaces and deck A accent as the main UI. No native light tab-bar background remains.
+- Add confirmed Reset this category to defaults actions for Appearance, Audio, Headphones, Playlists and Playback. Keep the current language, loaded tracks, list contents, transport positions, loop points and cache files. Stems has no persistent category settings to reset; cache deletion remains a separate explicit action.
+- Audio reset restores Auto rate, automatic BPM provider, enabled -1 dBFS limiter, ReplayGain off and scrobbling off. Headphone reset stops cue/excerpts and removes the output selection. Playlist reset restores the default title format and hides position numbers. Playback reset restores 5 s equal-power fades, Q off, silence trimming off and -60 dBFS threshold.
+- Includes all 0.40.1-beta.1 output-rate, settings-scroll and UI CPU fixes below. Native x64/x86 verification does not replace Fabcore’s real-device and CPU retest.
+
+## 0.40.1-beta.1 — previously unpublished development milestone (x64 / x86)
+
+- Fix the unconditional 48 kHz fallback when the output does not advertise a forced rate. Auto now chooses the first playing track's source rate at engine start (or first loaded track / 44.1 kHz fallback), then retains a fixed engine rate. The device's forced rate has priority. Settings → Audio adds Auto / 44.1 / 48 / 96 / 192 kHz, applied at next foobar restart; no assumption that foobar's outputCoreConfig exposes a rate field.
+- Replace the settings STATIC scroll host with a dedicated default-window viewport. Batch child layout without synchronous per-control repaint, keep scrollbar width stable, guard layout re-entry, support arrows/pages/top/bottom/thumb position, and accumulate fractional wheel input. Wheel over a closed combo scrolls the page rather than accidentally changing a setting; an open combo retains normal wheel behavior.
+- Reduce repeated glossy GDI+ rasterization with a per-UI-thread premultiplied-alpha surface cache, bounded to 96 entries / 16 MiB, with uncached fallback and normal Flat mode. Key includes size, accent and hover/pressed/casing state. Preserve dirty clipping and use AlphaBlend for reuse.
+- Limit panel animation to 30 fps; coalesce crossfader/volume drag repaints on the existing timer. Audio controls update immediately and audio processing clocks remain independent.
+- Native x64/x86 regressions cover output-rate choice, settings scrollbar/wheel and stable controls, cached hover/pressed/color rendering, 1,000 cache hits without rerasterization and eviction limits. No real-host CPU percentage, driver compatibility or resolution of Fabcore's particular setup is claimed without retesting.
+
+
 ## 0.40.0-beta.1 — 2026-11-16 (x64 / x86)
 
 Public beta with both architectures, installable packages, complete matching sources and SHA-256 checksums. Includes the previously unpublished 0.39.0 limiter, detailed below. The user confirmed the installed x64 version working. Both native suites are verified for release; external x86 host feedback remains welcome. Smart Tempo compatibility is verified by its public command GUID and mock-service dispatch; actual analysis/tag writing with an installed version still needs separate verification.

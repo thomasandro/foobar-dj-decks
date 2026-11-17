@@ -32,6 +32,7 @@ namespace pfc::stringcvt {struct string_wide_from_utf8{std::wstring value;string
 template<class T> struct Config{T value{};T get()const{return value;}void operator=(T v){value=v;}};
 struct Text {std::string value;const char* get_ptr()const{return value.c_str();}};
 struct TextConfig {Text value;Text get()const{return value;}};
+inline Config<int> cfg_outputRate{0};
 inline Config<int> cfg_bpmProvider{0};
 inline Config<int> cfg_masterLimiter{1},cfg_masterCeiling{-10};
 inline Config<GUID> cfg_cueBackend,cfg_cueDevice;
@@ -44,7 +45,7 @@ struct CDjPanel {
  struct SettingsDevice{std::wstring name;GUID backend,device;};std::vector<SettingsDevice> m_settingsDevices;std::wstring m_settingsDeviceError;
  struct Output {std::string lastError(){return {};}}m_cueOutput;
  std::atomic<bool> m_cue[2]={{false},{false}};std::atomic<double> m_cueVolume{.25};double m_fadeSeconds=5;std::atomic<bool> m_linearFade{false};bool m_loopSnap[2]={};
- std::atomic<bool> m_limitEnabled{true};std::atomic<double> m_limitCeiling{-1};
+ std::atomic<unsigned> m_outputRatePreference{0};std::atomic<bool> m_limitEnabled{true};std::atomic<double> m_limitCeiling{-1};
  DjSettingsWindow m_settings;std::vector<int> commands;int stopped=0,configured=0,refreshed=0,trimmed=0,saved=0,painted=0;
  COLORREF DeckAccent(int){return RGB(0,194,211);}void Invalidate(){++painted;}void StopPreview(){++stopped;}void ConfigureCue(){++configured;}void RefreshSettingsDevices(){++refreshed;}void RefreshTrimPreparations(){++trimmed;}void SaveSession(){++saved;}
  void SettingsCommand(int id){commands.push_back(id);if(id==1||id==2)g_english=id==2;if(id==10||id==11)dj_skin::flat=id==11;if(id>=100&&id<108)dj_skin::colorIndex[0]=id-100;if(id>=120&&id<128)dj_skin::colorIndex[1]=id-120;if(id>=210&&id<213)g_replaygain=id-210;if(id>=300&&id<304)cfg_queueFormat.value.value=dj_queue_format::presets[id-300];if(id==305)cfg_queueNumbers=cfg_queueNumbers.get()?0:1;if(id==220)g_scrobble=!g_scrobble.load();}

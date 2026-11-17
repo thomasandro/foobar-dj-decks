@@ -32,3 +32,10 @@ Les notifications de dessin des cases/boutons sont désormais transmises depuis 
 ## Sessions (0.37.0)
 
 L’onglet Playlists propose désormais l’enregistrement des deux listes, l’enregistrement des listes avec l’état des platines, le chargement et la récupération de l’état avant chargement. Voir [SESSION_FILES.md](SESSION_FILES.md). / The Playlists tab now includes save/load/recovery session actions; see SESSION_FILES.md.
+
+
+### Category defaults (0.40.2)
+
+The six category buttons follow the selected Glossy/Flat theme and deck A color. Ctrl+Tab / Ctrl+Shift+Tab switches categories; Tab and Shift+Tab move focus.
+
+Appearance, Audio, Headphones, Playlists and Playback each offer a confirmed reset to their defaults. Language is retained. Resets preserve music, playlist contents, deck positions and A/B points. Headphone reset stops cue/excerpts and clears the selected device; Audio reset disables scrobbling/ReplayGain and restores the enabled -1 dBFS limiter and Auto sample rate (rate change after restart). Stems cache cleanup remains separate and is never triggered by reset.

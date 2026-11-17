@@ -1,3 +1,7 @@
+# Release validation — 0.40.3-beta.1
+
+The owner confirms the installed x64 release working, including the settings repaint improvement. Both architectures compile and pass the full native suites. Output-rate selection, settings scroll paths, bounded skin-cache reuse, default bindings, retained control HWNDs after option changes, category navigation and hidden window lifecycle are checked without a foobar host or physical output. The owner has not tested this release in x86 foobar. The 48 kHz device error and 99% CPU report are addressed in code, but successful operation/performance on Fabcore’s setup is not yet established. No real-device benchmark or guaranteed CPU reduction is claimed. No foobar capture or monitoring.
+
 # Release validation — 0.40.0-beta.1
 
 The user confirmed the installed x64 version working. Both architectures compile and pass full native suites for release. New tests exercise the sample-peak limiter across five rates and four ceilings, stereo linkage, impulse protection, exact finite bypass, release, chunk invariance and extreme/invalid samples. Actual analyser and clear methods run against mock services/dialog answers to check GUID/provider/subsong, release-before-dispatch, unavailable/error behavior, confirmation cancellation and loaded/other-list preservation. Hidden playlist/settings/tooltip tests cover new commands/layout. Real-host x86 and actual external Smart Tempo analysis/tag writing still require external verification. No foobar access, capture or monitoring is used for release work.
