@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.42.0-beta.1 — 2026-11-19 (public prerelease, x64 / x86)
+
+The owner confirms the installed x64 release working. Both full native suites and the final targeted MIDI regressions pass. The owner has not tested this release in x86 foobar; broader controller/jog protocol and driver validation remains welcome.
+
+- Relative CC encoders for existing continuous mixer/tempo commands: two’s complement (1/127), binary offset 64 (65/63), signed magnitude (1/65), and offset 16 (17/15), with explicit per-assignment selection, inversion and six sensitivity choices. No auto-detection; buttons retain absolute press/release semantics. Soft takeover applies only to absolute controls. Relative changes are based on the current software value and clamp to the permitted range.
+- Added Jog A/B seek commands, usable paused or playing. Signed relative steps move source position by 10/25/50/100/250/1000 ms each. Aggregate jog movement on the UI timer, at most one seek per deck per tick, up to 30 s aggregate movement; cap relative magnitudes at 16 steps per message. Existing seek behavior preserves AUTO intent and disables an active loop when seeking outside it. Pending loads and unloaded readers are skipped.
+- MIDI mapping format v2 validates mode/sensitivity/action compatibility; imports legacy v1 associations as absolute without changing action IDs. Save v2 in a separate foobar configuration key, preserving the previous v1 data for rollback. Per-input profile identity and existing Note/CC/Pitch Bend behavior remain supported.
+- Jog means source navigation, not scratching or temporary pitch bend. No touch sensor, motor/LED output, proprietary HID, paired high-resolution CC or SysEx support. Only relative CC jog protocols are supported in this version.
+- Regression checks cover every 7-bit value in the four protocols, neutral/idle messages, Learn suppression, direction/inversion, pickup bypass, clamp limits, jog sensitivity/aggregation, loaded/pending guards, v1 migration and malformed-v2 rejection. The installed x64 release is subsequently owner-confirmed; the automated tests use simulated MIDI input and do not establish compatibility with every physical encoder/jog.
+
+
 ## 0.41.0-beta.1 — 2026-11-17 (public prerelease, x64 / x86)
 
 The owner confirms the installed x64 release and MIDI Learn working. Both full native suites pass. The owner has not tested this release in x86 foobar; broader controller/driver and x86 feedback remains welcome.

@@ -1,3 +1,7 @@
+# Release validation — 0.42.0-beta.1
+
+The owner confirms the installed x64 release working. The owner has not tested this release in x86 foobar. Both full native suites pass; final targeted MIDI checks also pass for all 128 values in four relative formats, neutral/idle messages, Learn suppression, inversion, pickup bypass, limits, legacy v1 migration, v2 invalid-record rollback, fractional-second jog movement, per-deck aggregation and pending/unloaded guards. The actual dispatcher and jog flusher execute with a mock panel; physical MIDI devices are not accessed by these tests. Native audio/seek/settings/queue regressions pass. No hardware compatibility or scratch-quality claim is made. No foobar capture or monitoring.
+
 # Release validation — 0.41.0-beta.1
 
 The owner confirms the installed x64 release and MIDI Learn working. The owner has not tested this release in x86 foobar. Both builds pass the full native suites. Tests use fake WinMM inputs (no physical device enumeration/opening) for Note/CC/Pitch Bend, Learn/collisions, press/release, takeover/inversion, strict Unicode persistence/rollback, 256-event queue/overflow, open/start failure, retry, ownership and teardown. Actual MidiCurrent/MidiApply methods execute with a mock panel for all 24 commands, selected tempo ranges, cue prerequisites and existing action delegation. Seven-category settings and earlier audio/playlist regressions pass. No foobar capture or monitoring. Broader controller/driver/x86 tests remain necessary.

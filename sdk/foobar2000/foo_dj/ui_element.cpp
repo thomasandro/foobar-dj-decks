@@ -87,6 +87,7 @@ namespace {
     static cfg_int cfg_midiPickup({0x6139a102,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,2}},1);
     static cfg_string cfg_midiDevice({0x6139a103,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,3}},"");
     static cfg_string cfg_midiMappings({0x6139a104,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,4}},"");
+    static cfg_string cfg_midiMappingsV2({0x6139a106,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,6}},"");
     static cfg_int cfg_outputRate({0x6139a004,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x04}},0);
     static cfg_int cfg_bpmProvider({0x6139a003,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x03}},0);
     static cfg_int cfg_masterLimiter({0x6139a001,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x01}},1);
@@ -571,9 +572,9 @@ namespace {
     private:
         LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); UpdateQueue(0,m_queueWindow[0].list?m_queueWindow[0].selected():std::vector<size_t>{}); UpdateQueue(1,m_queueWindow[1].list?m_queueWindow[1].selected():std::vector<size_t>{}); return 0; }
         dj_midi::Input m_midiInput;dj_midi::Router m_midiRouter;std::vector<dj_midi::Device> m_midiDevices;
-        std::vector<dj_midi::Profile> m_midiProfiles;int m_midiAction=0;std::wstring m_midiStatus;
+        std::vector<dj_midi::Profile> m_midiProfiles;int m_midiAction=0,m_midiMode=0,m_midiSensitivity=2;double m_midiJogDelta[2]={};std::wstring m_midiStatus;
         void MidiInitialize();void MidiConfigure();void MidiRefreshDevices();void MidiSave();void MidiTick();
-        double MidiCurrent(int action);void MidiApply(int action,double value);
+        double MidiCurrent(int action);void MidiApply(int action,double value);void MidiFlushJog();
         std::vector<dj_settings::Item> MidiValues();void MidiSetting(int id,int value);
         void RefreshDeckTags(int deck, bool readFile = false);
         void ReleaseForTags(int deck);
@@ -3244,7 +3245,8 @@ namespace {
         return 0;
     }
     void CDjPanel::MidiApply(int action,double value){
-        if(action==dj_midi::crossfade){CancelAutomation();m_crossfade=(float)value;}
+        if(dj_midi::jog(action)){int d=action-dj_midi::jogA;m_midiJogDelta[d]=std::clamp(m_midiJogDelta[d]+value,-30.,30.);}
+        else if(action==dj_midi::crossfade){CancelAutomation();m_crossfade=(float)value;}
         else if(action==dj_midi::volumeA||action==dj_midi::volumeB)m_volume[action-dj_midi::volumeA]=(float)value;
         else if(action==dj_midi::tempoA||action==dj_midi::tempoB){int d=action-dj_midi::tempoA;double r=dj_tempo::range(m_speedRange[d].load());m_speed[d]=1-r+2*r*value;}
         else if(action==dj_midi::playA||action==dj_midi::playB)TogglePlay(action-dj_midi::playA);
@@ -3257,9 +3259,16 @@ namespace {
         else if(action==dj_midi::keyA||action==dj_midi::keyB)MatchKey(action-dj_midi::keyA);
         m_dragDirty=true;
     }
+    void CDjPanel::MidiFlushJog(){
+        for(int i=0;i<2;++i){double delta=m_midiJogDelta[i];m_midiJogDelta[i]=0;if(!std::isfinite(delta)||std::abs(delta)<1e-9)continue;
+            double position;{std::lock_guard<std::mutex> lock(m_lock);const auto& d=m_deck[i];if(m_pendingLoad[i]||!d.loaded||!d.helper)continue;position=d.framesPlayed/double(m_outRate?m_outRate:48000);}
+            SeekDeck(i,position+delta);
+        }
+    }
     void CDjPanel::MidiInitialize(){
         m_midiRouter.pickup=cfg_midiPickup.get()!=0;
-        if(!dj_midi::load(cfg_midiMappings.get().get_ptr(),m_midiProfiles)){m_midiStatus=L"MIDI: invalid mappings / associations invalides";return;}
+        std::string stored=cfg_midiMappingsV2.get().get_ptr();if(stored.empty())stored=cfg_midiMappings.get().get_ptr();
+        if(!dj_midi::load(stored,m_midiProfiles)){m_midiStatus=L"MIDI: invalid mappings / associations invalides";return;}
         std::string key=cfg_midiDevice.get().get_ptr();for(auto& p:m_midiProfiles)if(p.device==key)m_midiRouter.bindings=p.bindings;
         if(cfg_midiEnabled.get())MidiConfigure();else m_midiStatus=g_english?L"MIDI disabled":L"MIDI désactivé";
     }
@@ -3268,10 +3277,10 @@ namespace {
         std::string key=cfg_midiDevice.get().get_ptr();if(key.empty())return;
         auto p=std::find_if(m_midiProfiles.begin(),m_midiProfiles.end(),[&](const dj_midi::Profile& p){return p.device==key;});
         if(p==m_midiProfiles.end()){if(m_midiProfiles.size()>=16){m_midiStatus=L"MIDI: 16 profiles maximum";return;}m_midiProfiles.push_back({key});p=m_midiProfiles.end()-1;}
-        p->bindings=m_midiRouter.bindings;cfg_midiMappings=dj_midi::save(m_midiProfiles).c_str();
+        p->bindings=m_midiRouter.bindings;cfg_midiMappingsV2=dj_midi::save(m_midiProfiles).c_str();
     }
     void CDjPanel::MidiConfigure(){
-        MidiRefreshDevices();m_midiInput.close();m_midiRouter.arm(-1);m_midiRouter.bindings={};m_midiRouter.pickup=cfg_midiPickup.get()!=0;
+        m_midiJogDelta[0]=m_midiJogDelta[1]=0;MidiRefreshDevices();m_midiInput.close();m_midiRouter.arm(-1);m_midiRouter.bindings={};m_midiRouter.pickup=cfg_midiPickup.get()!=0;
         std::string key=cfg_midiDevice.get().get_ptr();for(auto& p:m_midiProfiles)if(p.device==key)m_midiRouter.bindings=p.bindings;
         if(!cfg_midiEnabled.get()){m_midiStatus=g_english?L"MIDI disabled":L"MIDI désactivé";return;}
         auto device=std::find_if(m_midiDevices.begin(),m_midiDevices.end(),[&](const dj_midi::Device& d){return d.key==key;});
@@ -3281,8 +3290,9 @@ namespace {
     }
     void CDjPanel::MidiTick(){
         if(!m_midiInput.opened())return;bool lost=false;auto events=m_midiInput.drain(lost);
-        if(lost){m_midiInput.close();m_midiRouter.arm(-1);m_midiStatus=g_english?L"MIDI overload: input stopped. Retry connection.":L"Surcharge MIDI : entrée arrêtée. Réessayer la connexion.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();return;}
+        if(lost){m_midiJogDelta[0]=m_midiJogDelta[1]=0;m_midiInput.close();m_midiRouter.arm(-1);m_midiStatus=g_english?L"MIDI overload: input stopped. Retry connection.":L"Surcharge MIDI : entrée arrêtée. Réessayer la connexion.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();return;}
         bool learned=false;for(auto event:events)learned|=m_midiRouter.receive(event,[&](int a){return MidiCurrent(a);},[&](int a,double v){MidiApply(a,v);});
+        MidiFlushJog();
         if(learned){MidiSave();m_midiStatus=g_english?L"Association saved; release the button before using it.":L"Association enregistrée ; relâcher le bouton avant de l’utiliser.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();}
     }
     std::vector<dj_settings::Item> CDjPanel::MidiValues(){
@@ -3294,29 +3304,39 @@ namespace {
         if(!key.empty()&&!current){ports.push_back(en?L"Saved input unavailable":L"Entrée mémorisée indisponible");current=(int)ports.size()-1;}
         out.push_back({1701,en?L"Controller input":L"Entrée du contrôleur",Kind::combo,ports,current,true});action(1702,L"Actualiser / réessayer la connexion",L"Refresh / retry connection");
         std::vector<std::wstring> names;for(int a=0;a<dj_midi::count;++a)names.push_back(dj_midi::name(a,en));out.push_back({1703,en?L"Command to assign":L"Commande à associer",Kind::combo,names,m_midiAction,true});
-        out.push_back({0,dj_midi::describe(m_midiRouter.bindings[m_midiAction],en),Kind::note,{},0,true});
+        const auto& mapping=m_midiRouter.bindings[m_midiAction];int mode=dj_midi::valid(mapping)?mapping.mode:m_midiMode;int sensitivity=dj_midi::valid(mapping)?mapping.sensitivity:m_midiSensitivity;
+        std::vector<std::wstring> modes;for(int n=0;n<=dj_midi::offset16;++n)modes.push_back(dj_midi::modeName(n,en));
+        out.push_back({1710,en?L"Control message format":L"Format du contrôle",Kind::combo,modes,mode,dj_midi::continuous(m_midiAction)});
+        std::vector<std::wstring> sensitivities=dj_midi::jog(m_midiAction)?std::vector<std::wstring>{L"10 ms",L"25 ms",L"50 ms",L"100 ms",L"250 ms",L"1000 ms"}:std::vector<std::wstring>{L"0.1 %",L"0.25 %",L"0.5 %",L"1 %",L"2 %",L"5 %"};
+        out.push_back({1711,dj_midi::jog(m_midiAction)?(en?L"Jog distance per step":L"Déplacement jog par pas"):(en?L"Range per relative step":L"Part de la plage par pas relatif"),Kind::combo,sensitivities,sensitivity,dj_midi::continuous(m_midiAction)&&mode!=dj_midi::absolute});
+        out.push_back({0,dj_midi::describe(mapping,en),Kind::note,{},0,true});
         out.push_back({1704,m_midiRouter.learning>=0?(en?L"Waiting: move a control or press a button…":L"En attente : bouger un contrôle ou appuyer sur un bouton…"):(en?L"MIDI Learn: assign selected command":L"MIDI Learn : associer la commande choisie"),Kind::action,{},0,m_midiInput.opened()});
         action(1705,L"Annuler l’apprentissage",L"Cancel learning");action(1706,L"Supprimer cette association",L"Remove this assignment");
         out.push_back({1707,en?L"Soft takeover for knobs / faders":L"Rattrapage des potentiomètres / faders",Kind::toggle,{},cfg_midiPickup.get()!=0,true});
         out.push_back({1708,en?L"Invert this knob / fader":L"Inverser ce potentiomètre / fader",Kind::toggle,{},m_midiRouter.bindings[m_midiAction].inverted,dj_midi::continuous(m_midiAction)&&dj_midi::valid(m_midiRouter.bindings[m_midiAction])});
         action(1709,L"Effacer les associations de cette entrée…",L"Clear this input’s assignments…");
         out.push_back({0,m_midiStatus,Kind::note,{},0,true});
-        out.push_back({0,en?L"Choose input and command, then Learn. The learned message does not execute a command. CC absolute (7 bit), Pitch Bend (14 bit), Note/CC buttons only. No relative encoders, jog/scratch, SysEx or LED feedback.":L"Choisir entrée et commande puis Learn. Le message appris n’exécute pas la commande. CC absolus (7 bits), Pitch Bend (14 bits), boutons Note/CC. Pas d’encodeurs relatifs, jog/scratch, SysEx ou retour lumineux.",Kind::note,{},0,true});return out;
+        out.push_back({0,en?L"Choose input and command, then Learn. The learned message does not execute a command. Absolute CC/Pitch Bend and relative CC encoders. Jog A/B seeks in the track; no scratch or temporary pitch bend. Choose the format explicitly (no auto-detection). No SysEx/LED feedback.":L"Choisir entrée et commande puis Learn. Le message appris n’exécute pas la commande. CC/Pitch Bend absolus et encodeurs CC relatifs. Jog A/B déplace la lecture ; pas de scratch ni correction temporaire de vitesse. Choisir le format explicitement. Pas de SysEx/retour lumineux.",Kind::note,{},0,true});return out;
     }
     void CDjPanel::MidiSetting(int id,int value){
         if(id==1700){cfg_midiEnabled=value?1:0;MidiConfigure();}
         else if(id==1701){if(value==0){cfg_midiDevice="";MidiConfigure();}else if(value>0&&(size_t)value<=m_midiDevices.size()){cfg_midiDevice=m_midiDevices[value-1].key.c_str();MidiConfigure();}}
         else if(id==1702)MidiConfigure();
-        else if(id==1703){m_midiAction=std::clamp(value,0,int(dj_midi::count)-1);m_midiRouter.arm(-1);}
+        else if(id==1703){m_midiAction=std::clamp(value,0,int(dj_midi::count)-1);m_midiRouter.arm(-1);const auto& b=m_midiRouter.bindings[m_midiAction];m_midiMode=dj_midi::valid(b)?b.mode:(dj_midi::jog(m_midiAction)?dj_midi::twosComplement:dj_midi::absolute);m_midiSensitivity=dj_midi::valid(b)?b.sensitivity:2;}
         else if(id==1704&&m_midiInput.opened()){
             std::string key=cfg_midiDevice.get().get_ptr();bool known=false;for(auto& profile:m_midiProfiles)if(profile.device==key)known=true;
             if(!known&&m_midiProfiles.size()>=16){m_midiStatus=g_english?L"Maximum 16 saved MIDI inputs reached.":L"Limite de 16 entrées MIDI mémorisées atteinte.";return;}
-            m_midiInput.clear();m_midiRouter.arm(m_midiAction);
+            const auto& mapping=m_midiRouter.bindings[m_midiAction];m_midiInput.clear();m_midiRouter.arm(m_midiAction,dj_midi::valid(mapping)?mapping.mode:m_midiMode,dj_midi::valid(mapping)?mapping.sensitivity:m_midiSensitivity);
         }
         else if(id==1705){m_midiInput.clear();m_midiRouter.arm(-1);}
         else if(id==1706){m_midiRouter.forget(m_midiAction);MidiSave();}
         else if(id==1707){cfg_midiPickup=value?1:0;m_midiRouter.pickup=value!=0;m_midiRouter.reset();}
         else if(id==1708&&dj_midi::continuous(m_midiAction)){m_midiRouter.bindings[m_midiAction].inverted=value!=0;m_midiRouter.reset();MidiSave();}
+        else if(id==1710&&dj_midi::continuous(m_midiAction)){
+            m_midiMode=std::clamp(value,0,int(dj_midi::offset16));if(dj_midi::jog(m_midiAction)&&m_midiMode==dj_midi::absolute)m_midiMode=dj_midi::twosComplement;
+            auto& b=m_midiRouter.bindings[m_midiAction];if(dj_midi::valid(b)){b.mode=m_midiMode;if(!dj_midi::validFor(m_midiAction,b)){b={};m_midiStatus=g_english?L"Learn a CC control for relative mode.":L"Apprendre un contrôle CC pour le mode relatif.";}MidiSave();}m_midiInput.clear();m_midiRouter.arm(-1);
+        }
+        else if(id==1711&&dj_midi::continuous(m_midiAction)){m_midiSensitivity=std::clamp(value,0,5);auto& b=m_midiRouter.bindings[m_midiAction];b.sensitivity=m_midiSensitivity;m_midiRouter.arm(-1);MidiSave();}
         else if(id==1709){bool en=g_english.load();if(::MessageBoxW(m_settings.m_hWnd,en?L"Clear all assignments for this MIDI input? Other inputs are preserved.":L"Effacer toutes les associations de cette entrée MIDI ? Les autres entrées sont conservées.",L"DJ Decks MIDI",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)==IDYES){m_midiInput.clear();m_midiRouter.arm(-1);m_midiRouter.bindings={};MidiSave();}}
     }
 
@@ -3392,7 +3412,7 @@ namespace {
         return out;
     }
     void CDjPanel::SettingsChanged(int id,int value){
-        if(id>=1700&&id<=1709){MidiSetting(id,value);return;}
+        if(id>=1700&&id<=1711){MidiSetting(id,value);return;}
         if(id>=1900&&id<1905){
             // Reuse the normal setters so persisted and live values stay in sync.
             // Language, loaded media, transport and loop points are intentionally retained.

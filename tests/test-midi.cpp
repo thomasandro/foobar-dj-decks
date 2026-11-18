@@ -56,8 +56,22 @@ int main(){using namespace dj_midi;
  router.arm(tempoB);router.receive(message(0xe2,0,64),current,apply);assert(!valid(router.bindings[tempoA])&&valid(router.bindings[tempoB]));
  router.forget(tempoB);assert(!valid(router.bindings[tempoB])&&router.learning==-1);
  std::vector<Profile> profiles={{"Contrôleur 日本語",router.bindings}};auto saved=save(profiles);std::vector<Profile> loaded;assert(load(saved,loaded)&&save(loaded)==saved);
- for(auto bad:{"garbage","DJMIDI 2","DJMIDI 1\n\"x\" 99 11 0 7 0","DJMIDI 1\n\"x\" 0 9 0 7 0","DJMIDI 1\n\"x\" 0 11 0 7 2","DJMIDI 1\n\"x\" 0 11 0 7 0\n\"x\" 1 11 0 7 0"}){auto prior=save(loaded);assert(!load(bad,loaded)&&save(loaded)==prior);}
+ for(auto bad:{"garbage","DJMIDI 3","DJMIDI 1\n\"x\" 99 11 0 7 0","DJMIDI 1\n\"x\" 0 9 0 7 0","DJMIDI 1\n\"x\" 0 11 0 7 2","DJMIDI 1\n\"x\" 0 11 0 7 0\n\"x\" 1 11 0 7 0"}){auto prior=save(loaded);assert(!load(bad,loaded)&&save(loaded)==prior);}
  assert(!load(std::string(65537,'x'),loaded));
+ // Every 7-bit input, neutral values and the supported manufacturer conventions.
+ for(int v=0;v<128;++v){assert(delta(v,twosComplement)==(v<64?v:v-128));assert(delta(v,binaryOffset)==(v==0?0:v-64));assert(delta(v,signedMagnitude)==(v<64?v:64-v));assert(delta(v,offset16)==(v==0||v>31?0:v-16));}
+ assert(delta(127,twosComplement)==-1&&delta(1,twosComplement)==1&&delta(0,twosComplement)==0);
+ assert(delta(65,binaryOffset)==1&&delta(63,binaryOffset)==-1&&delta(64,binaryOffset)==0);
+ assert(delta(65,signedMagnitude)==-1&&delta(64,signedMagnitude)==0&&delta(17,offset16)==1&&delta(15,offset16)==-1);
+ Router relative;values[volumeB]=.5;relative.arm(volumeB,twosComplement,2);assert(!relative.receive(message(0xb1,21,0),current,apply));assert(!relative.receive(message(0xe1,1,1),current,apply));assert(relative.receive(message(0xb1,21,1),current,apply));
+ before=called;relative.receive(message(0xb1,21,1),current,apply);assert(called==before+1&&std::abs(values[volumeB]-.505)<1e-9); // pickup is bypassed for relative values
+ relative.receive(message(0xb1,21,127),current,apply);assert(std::abs(values[volumeB]-.5)<1e-9);
+ values[volumeB]=.999;relative.receive(message(0xb1,21,63),current,apply);assert(values[volumeB]==1);relative.bindings[volumeB].inverted=true;relative.receive(message(0xb1,21,1),current,apply);assert(std::abs(values[volumeB]-.995)<1e-9);
+ relative.arm(jogA,binaryOffset,2);assert(relative.receive(message(0xb2,22,65),current,apply));before=called;relative.receive(message(0xb2,22,66),current,apply);assert(last==jogA&&std::abs(values[jogA]-.1)<1e-9&&called==before+1);relative.receive(message(0xb2,22,63),current,apply);assert(std::abs(values[jogA]+.05)<1e-9);
+ relative.receive(message(0xb2,22,0),current,apply);assert(called==before+2);relative.bindings[jogA].sensitivity=5;relative.receive(message(0xb2,22,127),current,apply);assert(values[jogA]==16); // per-message safety bound
+ std::vector<Profile> migration;assert(load("DJMIDI 1\n\"old\" 1 11 0 7 1\n",migration));assert(migration[0].bindings[volumeA].mode==absolute&&migration[0].bindings[volumeA].inverted);assert(load(save(migration),loaded));
+ std::vector<Profile> newer={{"relative",relative.bindings}};assert(load(save(newer),loaded)&&save(loaded)==save(newer));
+ for(auto bad:{"DJMIDI 2\n\"x\" 24 11 0 7 0 0 2", "DJMIDI 2\n\"x\" 1 14 0 0 0 1 2", "DJMIDI 2\n\"x\" 5 11 0 7 0 1 2", "DJMIDI 2\n\"x\" 1 11 0 7 0 9 2", "DJMIDI 2\n\"x\" 1 11 0 7 0 1 8"}){auto prior=save(loaded);assert(!load(bad,loaded)&&save(loaded)==prior);}
  auto ports=devices();assert(ports.size()==1&&ports[0].key=="3:7:Fake controller#0");
  {Input input,second;assert(input.open(0)==0&&input.opened());assert(second.open(0)==MMSYSERR_ALLOCATED);fake::emit(message(0xb0,7,42));bool lost;auto pending=input.drain(lost);assert(!lost&&pending.size()==1);for(int n=0;n<300;++n)fake::emit(message(0xb0,7,n%128));pending=input.drain(lost);assert(lost&&pending.size()==256);input.clear();assert(input.drain(lost).empty()&&!lost);input.close();assert(!input.opened());assert(second.open(0)==0);second.close();fake::fail=1;assert(input.open(0)!=0&&!input.opened());fake::fail=2;assert(input.open(0)!=0&&!input.opened());fake::fail=0;assert(second.open(0)==0);}
  assert(fake::closes==4);
