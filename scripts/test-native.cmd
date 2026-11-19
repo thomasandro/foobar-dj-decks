@@ -5,7 +5,7 @@ call "%DJ_DECKS_VCVARS%" >nul
 if errorlevel 1 exit /b 2
 pushd "%~dp0.."
 if not exist build\tests mkdir build\tests
-for %%T in (test-midi test-midi-routing test-output-rate test-master-limiter test-drop test-tempo test-beats test-key test-skin test-language test-grid-storage test-queue test-queue-transfer test-queue-window test-stems test-stem-cache-manager test-listening-options test-scrobble-detection test-queue-duration test-cue test-preview test-preview-visual test-silence test-loop-storage) do (
+for %%T in (test-jog-bend test-midi test-midi-routing test-output-rate test-master-limiter test-drop test-tempo test-beats test-key test-skin test-language test-grid-storage test-queue test-queue-transfer test-queue-window test-stems test-stem-cache-manager test-listening-options test-scrobble-detection test-queue-duration test-cue test-preview test-preview-visual test-silence test-loop-storage) do (
   cl /nologo /EHsc /MD /O2 /utf-8 /std:c++20 "tests\%%T.cpp" /Fe:"build\tests\%%T.exe" /Fo:"build\tests\%%T.obj"
   if errorlevel 1 goto failed
 if not errorlevel 0 goto failed

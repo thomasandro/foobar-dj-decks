@@ -1,5 +1,6 @@
+#include "../sdk/foobar2000/foo_dj/jog_bend.h"
 #include "../sdk/foobar2000/foo_dj/session_bundle.h"
-class CDjPanel{
+class CDjPanel{ public: dj_jog::Bend m_jogBend[2];
     bool m_applyImport[2]={};dj_session::Deck m_importDeck[2];
 
 public:

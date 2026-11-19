@@ -1,3 +1,4 @@
+#include "../sdk/foobar2000/foo_dj/jog_bend.h"
 #define NOMINMAX
 #include <windows.h>
 #include <atomic>
@@ -24,7 +25,7 @@ namespace menu_helpers{inline GUID last{};inline bool succeeds=true,throws=false
 inline int answer=IDCANCEL,questions=0;
 inline int TestMessageBox(HWND,const wchar_t*,const wchar_t*,UINT){++questions;return answer;}
 #define MessageBoxW TestMessageBox
-struct CDjPanel{
+struct CDjPanel{ public: dj_jog::Bend m_jogBend[2];
  bool m_pendingLoad[2]={};std::string m_savedPath[2]={"test://track",""};unsigned m_savedSubsong[2]={7,0};int refreshed=0;
  void AnalyseDeck(int,int);void ReleaseForTags(int){++releases;}void RefreshDeckTags(int,bool=false){++refreshed;}
  std::vector<dj_queue::Item> m_queue[2];int m_queueCurrent[2]={-1,-1};bool m_chain[2]={true,true},m_previewOwned=false;int m_previewDeck=-1;

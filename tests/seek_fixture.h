@@ -1,3 +1,4 @@
+#include "../sdk/foobar2000/foo_dj/jog_bend.h"
 #include "../sdk/foobar2000/foo_dj/loop_storage.h"
 #include <stdexcept>
 #include "../sdk/foobar2000/foo_dj/ab_loop.h"
@@ -20,7 +21,7 @@ inline std::atomic<bool> g_english{false};
 inline std::string loopSavedText;inline bool loopSaveOK=true;inline std::mutex* loopMutex=nullptr;
 inline std::string GridKey(const std::string& path,unsigned subsong){picojson::array key{picojson::value(path),picojson::value(double(subsong))};return picojson::value(key).serialize();}
 inline bool WriteSessionFile(const std::string& text,const char*){if(loopMutex){assert(loopMutex->try_lock());loopMutex->unlock();}loopSavedText=text;return loopSaveOK;}
-struct CDjPanel{
+struct CDjPanel{ public: dj_jog::Bend m_jogBend[2];
     bool m_pendingLoad[2]={},m_autoChanging=false,m_alternate=true,m_chain[2]={},m_autoArmed[2]={true,true};double m_pendingSeek[2]={-1,-1};
     int m_queueCurrent[2]={3,5},cancelled=0;std::mutex m_lock;Deck m_deck[2];std::wstring m_error[2],m_loopNotice[2];unsigned m_outRate=1000;
     std::atomic<double> m_speed[2]={{1},{1}};std::atomic<float> m_crossfade{0};double m_fadeSeconds=5;dj_auto::Fade m_autoFade;

@@ -1,4 +1,12 @@
-# Changelog
+﻿# Changelog
+
+## 0.43.0-beta.1 — 2026-11-19 (public prerelease, x64 / x86)
+
+- Per-deck MIDI jog behaviour: keep seek navigation (default, preserving existing mappings), or select temporary speed correction. Existing 26 command IDs and mapping v2 remain unchanged.
+- Temporary bend adds a quarter of the selected maximum per signed relative tick, capped at 16 ticks per message and at ±0.5 / 1 / 2 / 4 / 8 percent (default ±2%). Opposite movement reduces/reverses the correction. Hold for 120 ms after the last movement, then return linearly over 180 ms. Expiry is evaluated in the audio engine and does not depend on UI timer delivery.
+- Multiply playback speed by the transient correction without writing the base tempo, selected range, BPM match or session speed. The existing key-lock setting applies. No seeks/decoder reopenings in bend mode, no playback start from paused state, no scratch/touch protocol.
+- Independent A/B configuration, saved across restarts. Clear transient corrections on play/pause, shared transport, seek, load/unload, MIDI input reconfiguration/overflow or behaviour/strength changes. Discard movement for pending/unloaded/paused decks. Temporary JOG percentage appears beside the unchanged base speed.
+- Automated checks exercise bounded impulses, signed reversal, expiry, timestamp wrap, deck isolation and actual MIDI dispatcher behaviour. The installed x64 candidate is owner-confirmed working. The owner has not tested x86 in foobar; broader physical controller validation is welcome. No foobar capture or surveillance.
 
 ## 0.42.0-beta.1 — 2026-11-19 (public prerelease, x64 / x86)
 

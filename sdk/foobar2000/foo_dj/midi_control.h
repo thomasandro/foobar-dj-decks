@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 #include <vector>
 #include <string>
@@ -14,8 +14,8 @@ enum Mode {absolute,twosComplement,binaryOffset,signedMagnitude,offset16};
 inline int delta(int value,int mode){if(value<0||value>127)return 0;switch(mode){case twosComplement:return value<64?value:value-128;case binaryOffset:return value==0?0:value-64;case signedMagnitude:return value<64?value:64-value;case offset16:return value==0||value>31?0:value-16;default:return 0;}}
 inline double step(int action,int sensitivity){static const double knobs[]={.001,.0025,.005,.01,.02,.05},seconds[]={.01,.025,.05,.1,.25,1};return (jog(action)?seconds:knobs)[std::clamp(sensitivity,0,5)];}
 inline const wchar_t* name(int action,bool en){
- static const wchar_t* english[]={L"Crossfader",L"A: volume",L"B: volume",L"A: tempo",L"B: tempo",L"A: play / pause",L"B: play / pause",L"A+B: toggle playback",L"A: return to start",L"B: return to start",L"A: unload",L"B: unload",L"A: headphone Cue",L"B: headphone Cue",L"A: set loop A",L"A: set loop B",L"A: loop on / off",L"B: set loop A",L"B: set loop B",L"B: loop on / off",L"A: match BPM",L"B: match BPM",L"A: match key",L"B: match key",L"A: jog (seek)",L"B: jog (seek)"};
- static const wchar_t* french[]={L"Crossfader",L"A : volume",L"B : volume",L"A : vitesse",L"B : vitesse",L"A : lecture / pause",L"B : lecture / pause",L"A+B : inverser les lectures",L"A : revenir au début",L"B : revenir au début",L"A : décharger",L"B : décharger",L"A : préécoute Cue",L"B : préécoute Cue",L"A : poser le point A",L"A : poser le point B",L"A : boucle oui / non",L"B : poser le point A",L"B : poser le point B",L"B : boucle oui / non",L"A : caler le BPM",L"B : caler le BPM",L"A : caler la tonalité",L"B : caler la tonalité",L"A : jog (déplacement)",L"B : jog (déplacement)"};
+ static const wchar_t* english[]={L"Crossfader",L"A: volume",L"B: volume",L"A: tempo",L"B: tempo",L"A: play / pause",L"B: play / pause",L"A+B: toggle playback",L"A: return to start",L"B: return to start",L"A: unload",L"B: unload",L"A: headphone Cue",L"B: headphone Cue",L"A: set loop A",L"A: set loop B",L"A: loop on / off",L"B: set loop A",L"B: set loop B",L"B: loop on / off",L"A: match BPM",L"B: match BPM",L"A: match key",L"B: match key",L"A: jog",L"B: jog"};
+ static const wchar_t* french[]={L"Crossfader",L"A : volume",L"B : volume",L"A : vitesse",L"B : vitesse",L"A : lecture / pause",L"B : lecture / pause",L"A+B : inverser les lectures",L"A : revenir au dÃ©but",L"B : revenir au dÃ©but",L"A : dÃ©charger",L"B : dÃ©charger",L"A : prÃ©Ã©coute Cue",L"B : prÃ©Ã©coute Cue",L"A : poser le point A",L"A : poser le point B",L"A : boucle oui / non",L"B : poser le point A",L"B : poser le point B",L"B : boucle oui / non",L"A : caler le BPM",L"B : caler le BPM",L"A : caler la tonalitÃ©",L"B : caler la tonalitÃ©",L"A : jog (dÃ©placement)",L"B : jog (dÃ©placement)"};
  return action>=0&&action<count?(en?english[action]:french[action]):L"?";
 }
 struct Event {int kind=0,channel=0,number=0,value=0,maximum=127;bool valid=false;};
@@ -79,5 +79,5 @@ public:
  }
 };
 inline std::wstring modeName(int mode,bool en){switch(mode){case twosComplement:return L"Rel. 1 / 127 (2's complement)";case binaryOffset:return L"Rel. 65 / 63 (offset 64)";case signedMagnitude:return L"Rel. 1 / 65 (signed magnitude)";case offset16:return L"Rel. 17 / 15 (offset 16)";default:return en?L"Absolute":L"Absolu";}}
-inline std::wstring describe(const Binding& b,bool en){if(!valid(b))return en?L"Not assigned":L"Non associé";return std::wstring(b.kind==9?L"Note ":b.kind==11?L"CC ":L"Pitch Bend ")+(b.kind==14?L"":std::to_wstring(b.number)+L" · ")+(en?L"channel ":L"canal ")+std::to_wstring(b.channel+1)+(b.mode==absolute?L"":L" · "+modeName(b.mode,en));}
+inline std::wstring describe(const Binding& b,bool en){if(!valid(b))return en?L"Not assigned":L"Non associÃ©";return std::wstring(b.kind==9?L"Note ":b.kind==11?L"CC ":L"Pitch Bend ")+(b.kind==14?L"":std::to_wstring(b.number)+L" Â· ")+(en?L"channel ":L"canal ")+std::to_wstring(b.channel+1)+(b.mode==absolute?L"":L" Â· "+modeName(b.mode,en));}
 }

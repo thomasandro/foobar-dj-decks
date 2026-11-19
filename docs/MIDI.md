@@ -1,6 +1,6 @@
-# MIDI Learn — 0.42.0-beta.1 (public prerelease)
+﻿# MIDI Learn — 0.43.0-beta.1 (public prerelease)
 
-MIDI input is disabled by default. The owner confirms the installed x64 0.42 release working. Both full native suites and final MIDI tests pass using simulated inputs. The owner has not tested this release in x86 foobar; compatibility with other physical controllers/jog protocols and drivers remains to be confirmed.
+MIDI input remains disabled by default. Temporary jog speed correction is new in 0.43; seek remains the default. Automated tests use simulated inputs; the installed x64 version is owner-confirmed working. The owner has not tested x86 in foobar; broader controller/driver testing remains welcome. No foobar capture or monitoring.
 
 ## Français
 
@@ -22,7 +22,7 @@ Soft takeover defaults on for continuous controls: move near/across the current 
 ## Limits and connection behavior
 
 - MIDI 1.0 short messages: Note buttons (Note Off / Note On velocity zero release), CC buttons (rising threshold 64), absolute CC knobs/faders (0–127), Pitch Bend (0–16383). Buttons should send both press and release; latch-only/toggle-only controller modes may require reconfiguration in the controller.
-- Relative CC encoders and seek-only jogs are now supported as described below. No scratch, temporary pitch bend, jog touch sensor, motor faders, LED feedback, paired high-resolution CC, proprietary HID, SysEx, MIDI clock or MIDI 2.0 mapping. Absolute/relative choice is explicit; the software does not guess the protocol.
+- Relative CC encoders and jogs are now supported as described below. No scratch, jog touch sensor, motor faders, LED feedback, paired high-resolution CC, proprietary HID, SysEx, MIDI clock or MIDI 2.0 mapping. Absolute/relative choice is explicit; the software does not guess the protocol.
 - Up to 16 saved input profiles, 26 actions each. Port names/manufacturer/product and duplicate-name occurrence identify a saved input. Identical ports cannot be distinguished reliably if their enumeration order changes; verify the selected port after reconnecting identical units. Never silently switches to another input.
 - Only one DJ Decks panel per foobar process can own MIDI input at a time, to avoid duplicate transport commands. Disable MIDI in that panel before enabling it elsewhere. Mappings are profile settings, not part of music tags or exported DJ session files.
 - No device polling or automatic reconnect loop. Refresh/retry after disconnect/reconnect. If the controller floods the bounded queue, MIDI input stops with a visible status; retry explicitly. No outgoing MIDI and no hardware access during tests.
@@ -54,4 +54,21 @@ Les formats/sensibilités sont sauvegardés par association. La version v2 est s
 
 Select a continuous target, choose **Control message format**, sensitivity and Learn. Supported relative CC formats are explicitly 1/127 two’s complement, 65/63 offset 64, 1/65 signed magnitude, or 17/15 offset 16. Invert to reverse direction. No automatic detection. Legacy mappings remain absolute; relative controls bypass pickup and adjust the current value, clamped to its range.
 
-Use **A/B: jog (seek)** for navigation, with 10–1000 ms per step. Steps coalesce into at most one seek per deck per UI tick; no automatic playback, scratch or temporary tempo bend. Seeking can audibly interrupt playback, respects trim bounds and disables an active loop if the seek exits it. Pending loads/unloaded readers are skipped. Physical jog protocols still need validation on each controller; proprietary HID/touch data is unsupported.
+Use **A/B: jog (seek)** for navigation, with 10–1000 ms per step. Steps coalesce into at most one seek per deck per UI tick; no automatic playback or scratch. Temporary speed correction is selectable as described below. Seeking can audibly interrupt playback, respects trim bounds and disables an active loop if the seek exits it. Pending loads/unloaded readers are skipped. Physical jog protocols still need validation on each controller; proprietary HID/touch data is unsupported.
+
+
+## Correction temporaire de vitesse des jogs — 0.43
+
+Dans **Réglages → MIDI**, sélectionner **A : jog** ou **B : jog**, puis **Action du jog → Correction temporaire de vitesse**. L’association CC relative existante est conservée ; sinon choisir le format du contrôleur et MIDI Learn. **Inverser** permet de changer le sens.
+
+Tourner vers l’avant accélère brièvement, vers l’arrière ralentit. Chaque pas ajoute un quart de la **correction temporaire maximale** choisie : ±0,5 / 1 / 2 / 4 / 8 % (±2 % par défaut). Les messages de plusieurs pas sont plafonnés à 16 pas. Un mouvement inverse réduit puis inverse la correction. Après la dernière impulsion : maintien 120 ms puis retour progressif en 180 ms, même si le timer de l’interface est retardé.
+
+Le curseur et la valeur de vitesse restent le tempo de base. Un indicateur **JOG ±… %** apparaît pendant la correction. La correction multiplie ce tempo et suit **Tonalité fixe** : activée, la tonalité est conservée ; désactivée, elle varie avec la vitesse. Cela ne déplace pas la lecture et ne modifie pas les points de boucle. Une platine en pause, déchargée ou en cours de chargement ignore la correction. Les actions de transport/chargement et la désactivation MIDI effacent la correction ; elle n’est pas enregistrée dans la session.
+
+Chaque platine garde son propre mode et sa propre amplitude. **Déplacement jog par pas** concerne uniquement le mode de déplacement, qui reste le choix par défaut. Ce n’est pas un mode scratch et aucun capteur de toucher n’est requis.
+
+### Temporary jog speed correction (English)
+
+Settings → MIDI → **A: jog / B: jog** → **Jog behaviour → Temporary speed correction**. Keep/learn a relative CC mapping and choose its explicit protocol; Invert reverses direction. Select maximum ±0.5/1/2/4/8% (default ±2%). Each signed tick adds a quarter of that limit, bounded to the selected maximum, with at most 16 ticks per message. Reverse motion cancels/reverses bend. Hold 120 ms after the last tick, then return over 180 ms, evaluated by the audio thread.
+
+Base tempo and session speed remain unchanged. The JOG percentage is temporary and follows the existing key-lock option. Bend does not seek, start paused decks or scratch. Pending/unloaded/paused decks ignore it. Transport/load changes and MIDI reset clear it. Each deck saves its own behaviour/strength; seek remains the default and its distance setting has no effect in bend mode.

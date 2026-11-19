@@ -1,3 +1,7 @@
+﻿# Release validation — 0.43.0-beta.1
+
+The installed x64 build is owner-confirmed working. x64 Release build/full native suite pass, as do targeted jog/MIDI tests for x64 and x86. The x86 Release build/full suite are checked for publication. The owner has not tested x86 in foobar. Tests cover bounded signed impulses, hold/decay/expiry, reversal, timestamp wrap, deck isolation, unchanged base tempo/no seek in bend mode, paused/pending guards, and seek clearing only the selected correction. Physical controller compatibility beyond the owner's setup remains to be confirmed. No foobar host was launched, captured or monitored during publication.
+
 # Release validation — 0.42.0-beta.1
 
 The owner confirms the installed x64 release working. The owner has not tested this release in x86 foobar. Both full native suites pass; final targeted MIDI checks also pass for all 128 values in four relative formats, neutral/idle messages, Learn suppression, inversion, pickup bypass, limits, legacy v1 migration, v2 invalid-record rollback, fractional-second jog movement, per-deck aggregation and pending/unloaded guards. The actual dispatcher and jog flusher execute with a mock panel; physical MIDI devices are not accessed by these tests. Native audio/seek/settings/queue regressions pass. No hardware compatibility or scratch-quality claim is made. No foobar capture or monitoring.

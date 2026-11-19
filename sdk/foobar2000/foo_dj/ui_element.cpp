@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 
 #include <ole2.h>
 #include <atlimage.h>
@@ -36,6 +36,7 @@
 #include "output_rate.h"
 #include "midi_control.h"
 #include "midi_input.h"
+#include "jog_bend.h"
 #include "queue_window.h"
 #include "settings_window.h"
 #include "tooltip_policy.h"
@@ -88,6 +89,11 @@ namespace {
     static cfg_string cfg_midiDevice({0x6139a103,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,3}},"");
     static cfg_string cfg_midiMappings({0x6139a104,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,4}},"");
     static cfg_string cfg_midiMappingsV2({0x6139a106,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,6}},"");
+    static cfg_int cfg_jogBendA({0x6139a107,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,7}},0);
+    static cfg_int cfg_jogBendB({0x6139a108,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,8}},0);
+    static cfg_int cfg_jogStrengthA({0x6139a109,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,9}},2);
+    static cfg_int cfg_jogStrengthB({0x6139a10a,0x71be,0x4ca3,{0x91,0x39,0,0,0,0,1,10}},2);
+
     static cfg_int cfg_outputRate({0x6139a004,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x04}},0);
     static cfg_int cfg_bpmProvider({0x6139a003,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x03}},0);
     static cfg_int cfg_masterLimiter({0x6139a001,0x71be,0x4ca3,{0x91,0x39,0x00,0x00,0x00,0x00,0x00,0x01}},1);
@@ -572,7 +578,7 @@ namespace {
     private:
         LRESULT OnMetadataRefresh(UINT,WPARAM,LPARAM,BOOL&) { RefreshDeckTags(0); RefreshDeckTags(1); UpdateQueue(0,m_queueWindow[0].list?m_queueWindow[0].selected():std::vector<size_t>{}); UpdateQueue(1,m_queueWindow[1].list?m_queueWindow[1].selected():std::vector<size_t>{}); return 0; }
         dj_midi::Input m_midiInput;dj_midi::Router m_midiRouter;std::vector<dj_midi::Device> m_midiDevices;
-        std::vector<dj_midi::Profile> m_midiProfiles;int m_midiAction=0,m_midiMode=0,m_midiSensitivity=2;double m_midiJogDelta[2]={};std::wstring m_midiStatus;
+        std::vector<dj_midi::Profile> m_midiProfiles;int m_midiAction=0,m_midiMode=0,m_midiSensitivity=2;double m_midiJogDelta[2]={};dj_jog::Bend m_jogBend[2];std::atomic<bool> m_jogBendMode[2]{};std::atomic<int> m_jogStrength[2]{{2},{2}};std::wstring m_midiStatus;
         void MidiInitialize();void MidiConfigure();void MidiRefreshDevices();void MidiSave();void MidiTick();
         double MidiCurrent(int action);void MidiApply(int action,double value);void MidiFlushJog();
         std::vector<dj_settings::Item> MidiValues();void MidiSetting(int id,int value);
@@ -1432,7 +1438,7 @@ namespace {
 			// En lecture, on la fait avancer au rythme de l'horloge, et on la rapproche doucement de la
 			// vraie position ; en cas de gros ecart (saut dans le morceau, nouveau fichier), on recale d'un coup.
 			if (m_cachePlaying[i]) {
-				double shown = m_cacheElapsed[i] + dt * m_speed[i].load();
+				double shown = m_cacheElapsed[i] + dt * m_speed[i].load()*(1+m_jogBend[i].value(GetTickCount64()));
 				const double err = m_trueElapsed[i] - shown;
 				if (m_cacheLoop[i].enabled || std::fabs(err) > 0.3) shown = m_trueElapsed[i];
 				else shown += err * 0.15;
@@ -1624,6 +1630,7 @@ namespace {
 				wchar_t label[64]; swprintf_s(label, Tr(L"Vitesse  %+.1f %%"), (speed-1.0)*100.0);
 				CRect caption(L.range.right+4, area.top, L.beat.left - 5, area.top+28);
 				DrawControl(dc,caption,RGB(8,10,14),RGB(65,72,82)); dc.SetTextColor(kText); std::wstring tempoLabel(label);
+                const double bend=m_jogBend[i].value(GetTickCount64());if(std::abs(bend)>.00001){wchar_t correction[40];swprintf_s(correction,L" | JOG %+.1f %%",bend*100);tempoLabel+=correction;}
                 double reference=m_cacheBpm[1-i]*m_speed[1-i].load();
                 if(m_cacheLoaded[0]&&m_cacheLoaded[1]&&reference>0){
                     double ratio=m_cacheBpm[i]*speed/reference;
@@ -1945,6 +1952,7 @@ namespace {
     // The external analysis command is asynchronous and has no shared completion API.
     // Keep all readers of this physical file released until the user explicitly plays.
     void CDjPanel::ReleaseForTags(int deck) {
+        m_jogBend[deck].clear();
         ClearPreparations();m_prepareSuspended[0]=m_prepareSuspended[1]=true;for(int i=0;i<2;++i){m_pendingLoad[i]=m_pendingPlay[i]=false;m_pendingSeek[i]=-1;}
         StopPreview(true);
         CancelAutomation();
@@ -2022,6 +2030,7 @@ namespace {
     }
 
     void CDjPanel::LoadDeck(int deck,const char* path,t_uint32 subsong){
+        m_jogBend[deck].clear();
         if(m_applyImport[deck]&&(m_importDeck[deck].item.path!=path||m_importDeck[deck].item.subsong!=subsong))m_applyImport[deck]=false;
         m_prepareSuspended[deck]=false;dj_queue::Item item{path,subsong};auto prepared=TakePreparation(deck,item);
         if(!TrimOptions().enabled()||prepared){m_pendingLoad[deck]=false;CommitLoadDeck(deck,path,subsong,prepared);return;}
@@ -2889,6 +2898,7 @@ namespace {
     }
 
 	void CDjPanel::TogglePlay(int deck) {
+        m_jogBend[0].clear();m_jogBend[1].clear();
         if(m_pendingLoad[deck]){m_pendingPlay[deck]=!m_pendingPlay[deck];return;}
         if(m_alternate&&!m_autoChanging) {
             {std::lock_guard<std::mutex> lock(m_lock);
@@ -2935,6 +2945,7 @@ namespace {
 
 	// Toggle both playing flags under one lock so the mixer observes them together.
 	void CDjPanel::PlayBoth() {
+        m_jogBend[0].clear();m_jogBend[1].clear();
         if(m_pendingLoad[0]||m_pendingLoad[1]){for(int i=0;i<2;++i)TogglePlay(i);return;}
         if(m_alternate){TogglePlay(m_autoActive);return;}
         if(!ReopenAfterTags(0) || !ReopenAfterTags(1)) return;
@@ -3038,6 +3049,7 @@ namespace {
 
     // Saute a l'instant donne (en secondes) du fichier du deck, en lecture ou en pause.
 	void CDjPanel::SeekDeck(int deck, double seconds) {
+        m_jogBend[deck].clear();
         if(m_pendingLoad[deck]){m_pendingSeek[deck]=seconds;return;}
 		std::lock_guard<std::mutex> lock(m_lock);
 		Deck & d = m_deck[deck];
@@ -3245,7 +3257,14 @@ namespace {
         return 0;
     }
     void CDjPanel::MidiApply(int action,double value){
-        if(dj_midi::jog(action)){int d=action-dj_midi::jogA;m_midiJogDelta[d]=std::clamp(m_midiJogDelta[d]+value,-30.,30.);}
+        if(dj_midi::jog(action)){int d=action-dj_midi::jogA;
+            if(m_jogBendMode[d].load()){
+                std::lock_guard<std::mutex> lock(m_lock);if(!m_pendingLoad[d]&&m_deck[d].loaded&&m_deck[d].helper&&m_deck[d].playing){
+                    double ticks=value/dj_midi::step(action,m_midiRouter.bindings[action].sensitivity);
+                    m_jogBend[d].pulse(ticks,m_jogStrength[d].load(),GetTickCount64());
+                }
+            }else m_midiJogDelta[d]=std::clamp(m_midiJogDelta[d]+value,-30.,30.);
+        }
         else if(action==dj_midi::crossfade){CancelAutomation();m_crossfade=(float)value;}
         else if(action==dj_midi::volumeA||action==dj_midi::volumeB)m_volume[action-dj_midi::volumeA]=(float)value;
         else if(action==dj_midi::tempoA||action==dj_midi::tempoB){int d=action-dj_midi::tempoA;double r=dj_tempo::range(m_speedRange[d].load());m_speed[d]=1-r+2*r*value;}
@@ -3266,6 +3285,7 @@ namespace {
         }
     }
     void CDjPanel::MidiInitialize(){
+        m_jogBendMode[0]=cfg_jogBendA.get()!=0;m_jogBendMode[1]=cfg_jogBendB.get()!=0;m_jogStrength[0]=std::clamp(int(cfg_jogStrengthA.get()),0,4);m_jogStrength[1]=std::clamp(int(cfg_jogStrengthB.get()),0,4);
         m_midiRouter.pickup=cfg_midiPickup.get()!=0;
         std::string stored=cfg_midiMappingsV2.get().get_ptr();if(stored.empty())stored=cfg_midiMappings.get().get_ptr();
         if(!dj_midi::load(stored,m_midiProfiles)){m_midiStatus=L"MIDI: invalid mappings / associations invalides";return;}
@@ -3280,7 +3300,7 @@ namespace {
         p->bindings=m_midiRouter.bindings;cfg_midiMappingsV2=dj_midi::save(m_midiProfiles).c_str();
     }
     void CDjPanel::MidiConfigure(){
-        m_midiJogDelta[0]=m_midiJogDelta[1]=0;MidiRefreshDevices();m_midiInput.close();m_midiRouter.arm(-1);m_midiRouter.bindings={};m_midiRouter.pickup=cfg_midiPickup.get()!=0;
+        m_jogBend[0].clear();m_jogBend[1].clear();m_midiJogDelta[0]=m_midiJogDelta[1]=0;MidiRefreshDevices();m_midiInput.close();m_midiRouter.arm(-1);m_midiRouter.bindings={};m_midiRouter.pickup=cfg_midiPickup.get()!=0;
         std::string key=cfg_midiDevice.get().get_ptr();for(auto& p:m_midiProfiles)if(p.device==key)m_midiRouter.bindings=p.bindings;
         if(!cfg_midiEnabled.get()){m_midiStatus=g_english?L"MIDI disabled":L"MIDI désactivé";return;}
         auto device=std::find_if(m_midiDevices.begin(),m_midiDevices.end(),[&](const dj_midi::Device& d){return d.key==key;});
@@ -3289,8 +3309,9 @@ namespace {
         m_midiStatus=(g_english?L"MIDI connected: ":L"MIDI connecté : ")+device->name;
     }
     void CDjPanel::MidiTick(){
+        for(int i=0;i<2;++i){std::lock_guard<std::mutex> lock(m_lock);if(!m_deck[i].playing)m_jogBend[i].clear();}
         if(!m_midiInput.opened())return;bool lost=false;auto events=m_midiInput.drain(lost);
-        if(lost){m_midiJogDelta[0]=m_midiJogDelta[1]=0;m_midiInput.close();m_midiRouter.arm(-1);m_midiStatus=g_english?L"MIDI overload: input stopped. Retry connection.":L"Surcharge MIDI : entrée arrêtée. Réessayer la connexion.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();return;}
+        if(lost){m_jogBend[0].clear();m_jogBend[1].clear();m_midiJogDelta[0]=m_midiJogDelta[1]=0;m_midiInput.close();m_midiRouter.arm(-1);m_midiStatus=g_english?L"MIDI overload: input stopped. Retry connection.":L"Surcharge MIDI : entrée arrêtée. Réessayer la connexion.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();return;}
         bool learned=false;for(auto event:events)learned|=m_midiRouter.receive(event,[&](int a){return MidiCurrent(a);},[&](int a,double v){MidiApply(a,v);});
         MidiFlushJog();
         if(learned){MidiSave();m_midiStatus=g_english?L"Association saved; release the button before using it.":L"Association enregistrée ; relâcher le bouton avant de l’utiliser.";if(m_settings.m_hWnd&&m_settings.selected==6)m_settings.refresh();}
@@ -3308,7 +3329,12 @@ namespace {
         std::vector<std::wstring> modes;for(int n=0;n<=dj_midi::offset16;++n)modes.push_back(dj_midi::modeName(n,en));
         out.push_back({1710,en?L"Control message format":L"Format du contrôle",Kind::combo,modes,mode,dj_midi::continuous(m_midiAction)});
         std::vector<std::wstring> sensitivities=dj_midi::jog(m_midiAction)?std::vector<std::wstring>{L"10 ms",L"25 ms",L"50 ms",L"100 ms",L"250 ms",L"1000 ms"}:std::vector<std::wstring>{L"0.1 %",L"0.25 %",L"0.5 %",L"1 %",L"2 %",L"5 %"};
-        out.push_back({1711,dj_midi::jog(m_midiAction)?(en?L"Jog distance per step":L"Déplacement jog par pas"):(en?L"Range per relative step":L"Part de la plage par pas relatif"),Kind::combo,sensitivities,sensitivity,dj_midi::continuous(m_midiAction)&&mode!=dj_midi::absolute});
+        out.push_back({1711,dj_midi::jog(m_midiAction)?(en?L"Jog distance per step":L"Déplacement jog par pas"):(en?L"Range per relative step":L"Part de la plage par pas relatif"),Kind::combo,sensitivities,sensitivity,dj_midi::continuous(m_midiAction)&&mode!=dj_midi::absolute&&(!dj_midi::jog(m_midiAction)||!m_jogBendMode[m_midiAction-dj_midi::jogA].load())});
+        if(dj_midi::jog(m_midiAction)){int d=m_midiAction-dj_midi::jogA;
+            out.push_back({1712,en?L"Jog behaviour (selected deck)":L"Action du jog (platine choisie)",Kind::combo,{en?L"Seek in track":L"Déplacement dans le morceau",en?L"Temporary speed correction":L"Correction temporaire de vitesse"},m_jogBendMode[d].load()?1:0,true});
+            out.push_back({1713,en?L"Maximum temporary correction":L"Correction temporaire maximale",Kind::combo,{L"±0.5 %",L"±1 %",L"±2 %",L"±4 %",L"±8 %"},m_jogStrength[d].load(),m_jogBendMode[d].load()});
+            out.push_back({0,en?L"Bend: each MIDI step adds a quarter of the maximum. Hold 120 ms, return over 180 ms. Base tempo stays unchanged. Only while playing; no scratch.":L"Correction : chaque pas MIDI ajoute un quart du maximum. Maintien 120 ms, retour en 180 ms. Tempo de base inchangé. Seulement en lecture ; pas de scratch.",Kind::note,{},0,true});
+        }
         out.push_back({0,dj_midi::describe(mapping,en),Kind::note,{},0,true});
         out.push_back({1704,m_midiRouter.learning>=0?(en?L"Waiting: move a control or press a button…":L"En attente : bouger un contrôle ou appuyer sur un bouton…"):(en?L"MIDI Learn: assign selected command":L"MIDI Learn : associer la commande choisie"),Kind::action,{},0,m_midiInput.opened()});
         action(1705,L"Annuler l’apprentissage",L"Cancel learning");action(1706,L"Supprimer cette association",L"Remove this assignment");
@@ -3316,9 +3342,10 @@ namespace {
         out.push_back({1708,en?L"Invert this knob / fader":L"Inverser ce potentiomètre / fader",Kind::toggle,{},m_midiRouter.bindings[m_midiAction].inverted,dj_midi::continuous(m_midiAction)&&dj_midi::valid(m_midiRouter.bindings[m_midiAction])});
         action(1709,L"Effacer les associations de cette entrée…",L"Clear this input’s assignments…");
         out.push_back({0,m_midiStatus,Kind::note,{},0,true});
-        out.push_back({0,en?L"Choose input and command, then Learn. The learned message does not execute a command. Absolute CC/Pitch Bend and relative CC encoders. Jog A/B seeks in the track; no scratch or temporary pitch bend. Choose the format explicitly (no auto-detection). No SysEx/LED feedback.":L"Choisir entrée et commande puis Learn. Le message appris n’exécute pas la commande. CC/Pitch Bend absolus et encodeurs CC relatifs. Jog A/B déplace la lecture ; pas de scratch ni correction temporaire de vitesse. Choisir le format explicitement. Pas de SysEx/retour lumineux.",Kind::note,{},0,true});return out;
+        out.push_back({0,en?L"Choose input and command, then Learn. The learned message does not execute a command. Absolute CC/Pitch Bend and relative CC encoders. Jog A/B: choose seek or temporary speed correction for each deck. Choose the format explicitly (no auto-detection). No SysEx/LED feedback.":L"Choisir entrée et commande puis Learn. Le message appris n’exécute pas la commande. CC/Pitch Bend absolus et encodeurs CC relatifs. Jog A/B : déplacement ou correction temporaire de vitesse par platine. Choisir le format explicitement. Pas de SysEx/retour lumineux.",Kind::note,{},0,true});return out;
     }
     void CDjPanel::MidiSetting(int id,int value){
+        m_jogBend[0].clear();m_jogBend[1].clear();
         if(id==1700){cfg_midiEnabled=value?1:0;MidiConfigure();}
         else if(id==1701){if(value==0){cfg_midiDevice="";MidiConfigure();}else if(value>0&&(size_t)value<=m_midiDevices.size()){cfg_midiDevice=m_midiDevices[value-1].key.c_str();MidiConfigure();}}
         else if(id==1702)MidiConfigure();
@@ -3335,6 +3362,10 @@ namespace {
         else if(id==1710&&dj_midi::continuous(m_midiAction)){
             m_midiMode=std::clamp(value,0,int(dj_midi::offset16));if(dj_midi::jog(m_midiAction)&&m_midiMode==dj_midi::absolute)m_midiMode=dj_midi::twosComplement;
             auto& b=m_midiRouter.bindings[m_midiAction];if(dj_midi::valid(b)){b.mode=m_midiMode;if(!dj_midi::validFor(m_midiAction,b)){b={};m_midiStatus=g_english?L"Learn a CC control for relative mode.":L"Apprendre un contrôle CC pour le mode relatif.";}MidiSave();}m_midiInput.clear();m_midiRouter.arm(-1);
+        }
+        else if((id==1712||id==1713)&&dj_midi::jog(m_midiAction)){int d=m_midiAction-dj_midi::jogA;m_jogBend[d].clear();m_midiJogDelta[d]=0;m_midiInput.clear();m_midiRouter.arm(-1);
+            if(id==1712){m_jogBendMode[d]=value!=0;if(d)cfg_jogBendB=value?1:0;else cfg_jogBendA=value?1:0;}
+            else {value=std::clamp(value,0,4);m_jogStrength[d]=value;if(d)cfg_jogStrengthB=value;else cfg_jogStrengthA=value;}
         }
         else if(id==1711&&dj_midi::continuous(m_midiAction)){m_midiSensitivity=std::clamp(value,0,5);auto& b=m_midiRouter.bindings[m_midiAction];b.sensitivity=m_midiSensitivity;m_midiRouter.arm(-1);MidiSave();}
         else if(id==1709){bool en=g_english.load();if(::MessageBoxW(m_settings.m_hWnd,en?L"Clear all assignments for this MIDI input? Other inputs are preserved.":L"Effacer toutes les associations de cette entrée MIDI ? Les autres entrées sont conservées.",L"DJ Decks MIDI",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)==IDYES){m_midiInput.clear();m_midiRouter.arm(-1);m_midiRouter.bindings={};MidiSave();}}
@@ -3412,7 +3443,7 @@ namespace {
         return out;
     }
     void CDjPanel::SettingsChanged(int id,int value){
-        if(id>=1700&&id<=1711){MidiSetting(id,value);return;}
+        if(id>=1700&&id<=1713){MidiSetting(id,value);return;}
         if(id>=1900&&id<1905){
             // Reuse the normal setters so persisted and live values stay in sync.
             // Language, loaded media, transport and loop points are intentionally retained.
@@ -3555,7 +3586,8 @@ namespace {
                 double cueGain[2];dj_cue::gains(cueA,cueB,m_cueVolume.load(),cueGain);
                 for(int i=0;i<2;++i)cueGain[i]*=dj_listening::gain(g_replaygain.load(),m_rgTrack[i].load(),m_rgAlbum[i].load());
                 cueMix.clear();
-                const double speeds[2] = {m_speed[0].load(), m_speed[1].load()};
+                const auto bendTime=GetTickCount64();
+                const double speeds[2] = {m_speed[0].load()*(1+m_jogBend[0].value(bendTime)), m_speed[1].load()*(1+m_jogBend[1].value(bendTime))};
 				const bool fixedPitch[2] = {m_fixedPitch[0].load(), m_fixedPitch[1].load()};
 				size_t frames = 0;
 				{

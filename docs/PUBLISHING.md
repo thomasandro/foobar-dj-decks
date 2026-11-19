@@ -1,4 +1,4 @@
-# Publishing
+﻿# Publishing
 
 Repository: https://github.com/thomasandro/foobar-dj-decks
 First alpha: v0.12.0-alpha.1.

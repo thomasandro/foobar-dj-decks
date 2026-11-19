@@ -1,4 +1,4 @@
-# DJ Decks 0.40.0-beta.1 — bêta x64 et x86
+﻿# DJ Decks 0.40.0-beta.1 — bêta x64 et x86
 
 Depuis 0.38.1 : limiteur du mix principal activé par défaut à −1 dBFS, plafond réglable et voyant LIM/CLIP ; Échap pour masquer les playlists ; bouton Vider la liste avec confirmation ; sélection de l’analyseur BPM (Automatique, foo_smart_tempo ou foo_bpm). Le changelog détaille également la 0.39.0 non publiée séparément.
 

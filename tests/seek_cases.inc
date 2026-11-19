@@ -1,5 +1,5 @@
 int main(){
-    {CDjPanel p;p.m_deck[0].playing=true;p.SeekDeck(0,20);assert(p.m_alternate&&p.cancelled==0&&p.m_deck[0].playing&&!p.m_deck[1].playing);
+    {CDjPanel p;p.m_jogBend[0].pulse(4,2,1000);p.m_jogBend[1].pulse(-4,2,1000);p.m_deck[0].playing=true;p.SeekDeck(0,20);assert(p.m_jogBend[0].value(1000)==0&&p.m_jogBend[1].value(1000)==-.02);assert(p.m_alternate&&p.cancelled==0&&p.m_deck[0].playing&&!p.m_deck[1].playing);
      assert(p.m_deck[0].framesPlayed==20000&&p.m_queueCurrent[0]==3&&p.m_queueCurrent[1]==5&&p.m_crossfade==0);}
     {CDjPanel p;p.m_chain[0]=true;p.m_deck[0].eof=true;p.SeekDeck(0,0);assert(p.m_alternate&&p.m_chain[0]&&!p.m_deck[0].playing&&!p.m_deck[0].eof);}
     {CDjPanel p;p.m_pendingLoad[0]=true;p.SeekDeck(0,25);assert(p.m_pendingSeek[0]==25&&p.m_alternate&&p.cancelled==0);}
